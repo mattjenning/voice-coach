@@ -17,8 +17,3 @@ export function tonePlayer(midi: number): AudioPlayer {
   }
   return player;
 }
-
-/** Get a tone loading before it is asked for, so it plays without a wait. */
-export function warmTone(midi: number): void {
-  if (tones[midi] !== undefined) tonePlayer(midi);
-}

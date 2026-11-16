@@ -7,6 +7,7 @@ import { useTheme } from '@/hooks/use-theme';
 import type { StepResult } from '@/lib/exercise';
 import { HOLD } from '@/lib/hold';
 import { formatCents, noteName } from '@/lib/notes';
+import { stepLabel } from '@/lib/slide';
 import { grade, noteScore, rangeSize, summarize } from '@/lib/report';
 
 function Fact({ label, value }: { label: string; value: string }) {
@@ -23,11 +24,15 @@ function Fact({ label, value }: { label: string; value: string }) {
 /** One line per note: its name, whether it was matched, the best attempt, and its score. */
 function NoteRows({ results }: { results: StepResult[] }) {
   const theme = useTheme();
+  // Slides have longer names than notes, so their column is wider.
+  const wide = results.some((result) => result.step.slide !== undefined);
   return (
     <View style={styles.rows}>
       {results.map((result, i) => {
         let attempt = 'not heard';
-        if (result.closestCents !== null) {
+        if (result.step.slide !== undefined) {
+          attempt = result.closestCents === null ? 'not heard' : `${Math.round(result.closestCents)} cents off`;
+        } else if (result.closestCents !== null) {
           attempt = formatCents(result.closestCents, HOLD.toleranceCents);
           if (!result.matched && Math.abs(result.closestCents) <= HOLD.toleranceCents) {
             attempt = 'in tune, not held';
@@ -35,8 +40,8 @@ function NoteRows({ results }: { results: StepResult[] }) {
         }
         return (
           <View key={i} style={styles.row}>
-            <ThemedText style={styles.rowNote}>
-              {result.step.midi === null ? 'Any note' : noteName(result.step.midi)}
+            <ThemedText style={wide ? styles.rowSlide : styles.rowNote}>
+              {stepLabel(result.step)}
             </ThemedText>
             <ThemedText
               type="smallBold"
@@ -44,7 +49,7 @@ function NoteRows({ results }: { results: StepResult[] }) {
               {result.matched ? 'Matched' : 'Missed'}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={styles.rowAttempt}>
-              {result.matched ? '' : attempt}
+              {result.matched || wide ? '' : attempt}
             </ThemedText>
             <ThemedText type="smallBold" style={styles.rowScore}>
               {noteScore(result)}%
@@ -94,7 +99,9 @@ export function ReportCard({
             value={
               summary.averageOffCents === null
                 ? 'nothing heard'
-                : `${Math.round(summary.averageOffCents)} cents`
+                : Math.round(summary.averageOffCents) === 1
+                  ? '1 cent'
+                  : `${Math.round(summary.averageOffCents)} cents`
             }
           />
           <Fact
@@ -152,6 +159,9 @@ const styles = StyleSheet.create({
   },
   rowNote: {
     width: 56,
+  },
+  rowSlide: {
+    width: 104,
   },
   rowMark: {
     width: 72,

@@ -28,8 +28,12 @@ import {
   HIGHEST_TONE,
   LOWEST_TONE,
   NO_RUN,
+  SLIDE_SHAPE,
   currentStep,
   noteStep,
+  slideMidiAt,
+  slideMs,
+  slideStep,
   runReducer,
   timeLeftMs,
   type Run,
@@ -51,6 +55,7 @@ import {
 } from '../src/lib/progression.ts';
 import { MAJOR_SCALE, SHIFTS, STARTS, canShift, canStartOn, scaleSteps } from '../src/lib/quick.ts';
 import { grade, noteScore, rangeSize, summarize } from '../src/lib/report.ts';
+import { slideSound, slideSteps, stepLabel } from '../src/lib/slide.ts';
 import { readWav, writeWav } from '../src/lib/wav.ts';
 
 /** A repeatable stand-in for Math.random, so a failing check fails every time. */
@@ -385,6 +390,106 @@ assert.equal(currentStep(NO_RUN), null);
   assert.equal(run.phase, 'done');
   assert.ok(run.results[0].matched);
   assert.equal(run.results[0].sungMidi, 53);
+}
+
+// --- Slides ----------------------------------------------------------------
+
+{
+  const step = slideStep(60, 62); // C4 gliding up to D4
+  const slide = step.slide!;
+  const total = slideMs(slide);
+  assert.equal(total, 3000);
+  assert.equal(slideMidiAt(60, slide, 0), 60);
+  assert.equal(slideMidiAt(60, slide, SLIDE_SHAPE.leadMs), 60);
+  assert.equal(slideMidiAt(60, slide, 1500), 61, 'half way through the glide is half way between');
+  assert.equal(slideMidiAt(60, slide, total), 62);
+  assert.equal(stepLabel(step), 'C4 → D4');
+  assert.equal(stepLabel(noteStep(60)), 'C4');
+
+  /** Sing along a slide: `pitchAt` gives the note number sung at each moment, or null. */
+  const follow = (startAt: number, pitchAt: (tMs: number) => number | null): Run => {
+    let run = runReducer(NO_RUN, { type: 'start', steps: [step] });
+    run = runReducer(run, { type: 'listen', atMs: 0 });
+    for (let at = 100; at < startAt; at += 100) run = hear(run, null, at);
+    for (let at = startAt; run.phase === 'listening' && at < 20_000; at += 100) {
+      const midi = pitchAt(at - startAt);
+      run = hear(run, midi === null ? null : hzOf(midi), at);
+    }
+    return run;
+  };
+
+  const perfect = follow(100, (t) => slideMidiAt(60, slide, t));
+  assert.equal(perfect.phase, 'done');
+  assert.equal(perfect.results[0].score, 100);
+  assert.ok(perfect.results[0].matched);
+  assert.equal(perfect.results[0].sungMidi, 60);
+  assert.equal(noteScore(perfect.results[0]), 100);
+
+  const lateStart = follow(1800, (t) => slideMidiAt(60, slide, t));
+  assert.equal(lateStart.results[0].score, 100, 'the clock starts when the singer does');
+
+  const octaveDown = follow(100, (t) => slideMidiAt(60, slide, t) - 12);
+  assert.equal(octaveDown.results[0].score, 100, 'an octave down still counts');
+  assert.equal(octaveDown.results[0].sungMidi, 48);
+
+  // Staying on the first note: on the line for the lead-in and the first part of the glide.
+  const stuck = follow(100, () => 60);
+  const stuckScore = stuck.results[0].score ?? -1;
+  assert.ok(stuckScore > 25 && stuckScore < 45, `staying put scored ${stuckScore}`);
+  assert.ok(!stuck.results[0].matched);
+  assert.ok((stuck.results[0].closestCents ?? 0) > 50);
+
+  // Singing the slide well, then stopping half way.
+  const halfway = follow(100, (t) => (t <= 1500 ? slideMidiAt(60, slide, t) : null));
+  const halfScore = halfway.results[0].score ?? -1;
+  assert.ok(halfScore > 45 && halfScore < 60, `stopping half way scored ${halfScore}`);
+
+  const silent = follow(99_999, () => null);
+  assert.equal(silent.results[0].score, 0);
+  assert.equal(silent.results[0].closestCents, null);
+  assert.equal(summarize(silent.results).score, 0);
+
+  // If the microphone goes quiet mid-slide, the clock alone still ends it.
+  let ticking = runReducer(NO_RUN, { type: 'start', steps: [step, step] });
+  ticking = runReducer(ticking, { type: 'listen', atMs: 0 });
+  ticking = hear(ticking, hzOf(60), 200);
+  ticking = runReducer(ticking, { type: 'tick', atMs: 2000 });
+  assert.equal(ticking.index, 0);
+  ticking = runReducer(ticking, { type: 'tick', atMs: 3300 });
+  assert.equal(ticking.index, 1, 'three seconds after the first sound, it moves on');
+
+  // The sets: seven slides each.
+  const up = slideSteps(48, 'up', seeded(3));
+  assert.deepEqual(up.map(stepLabel), ['C3 → D3', 'D3 → E3', 'E3 → F3', 'F3 → G3', 'G3 → A3', 'A3 → B3', 'B3 → C4']);
+  const down = slideSteps(48, 'down', seeded(3));
+  assert.deepEqual(down.map(stepLabel), ['C4 → B3', 'B3 → A3', 'A3 → G3', 'G3 → F3', 'F3 → E3', 'E3 → D3', 'D3 → C3']);
+  const scaleNotes = MAJOR_SCALE.map((above) => 48 + above);
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const any = slideSteps(48, 'random', seeded(seed));
+    assert.equal(any.length, 7);
+    for (const each of any) {
+      assert.ok(scaleNotes.includes(each.midi ?? -1) && scaleNotes.includes(each.slide!.toMidi));
+      assert.notEqual(each.midi, each.slide!.toMidi, 'a slide has to go somewhere');
+    }
+  }
+  assert.notDeepEqual(
+    slideSteps(48, 'random', seeded(1)).map(stepLabel),
+    slideSteps(48, 'random', seeded(2)).map(stepLabel),
+  );
+
+  // The sound of a slide really starts on one note and ends on the other.
+  const sound = slideSound(60, slide, 12_000);
+  assert.equal(sound.length, 36_000);
+  const heard = trackPitch(sound, 12_000).points.filter((point) => point.hz !== null);
+  const first = heard[2].hz ?? 0;
+  const last = heard[heard.length - 3].hz ?? 0;
+  assert.ok(Math.abs(centsBetween(first, midiToHz(60))) < 10, 'starts on C4');
+  assert.ok(Math.abs(centsBetween(last, midiToHz(62))) < 10, 'ends on D4');
+  const middle = heard.find((point) => point.atMs >= 1500)?.hz ?? 0;
+  assert.ok(Math.abs(centsBetween(middle, midiToHz(61))) < 25, 'and passes through the middle');
+  let peak = 0;
+  for (const value of sound) peak = Math.max(peak, Math.abs(value));
+  assert.ok(Math.abs(peak - 0.9) < 0.001);
 }
 
 // --- Quick practice --------------------------------------------------------

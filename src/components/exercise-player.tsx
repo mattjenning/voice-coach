@@ -4,7 +4,7 @@ import { AppState } from 'react-native';
 import { RunView } from '@/components/run-view';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui';
-import { tonePlayer, warmTone } from '@/hooks/tone-players';
+import { stepPlayer } from '@/hooks/slide-sounds';
 import { usePitch, type Listening } from '@/hooks/use-pitch';
 import { NO_RUN, runReducer, type Run, type Step, type StepResult } from '@/lib/exercise';
 
@@ -45,15 +45,15 @@ export function ExercisePlayer({
     dispatch({ type: 'pitch', hz, atMs }),
   );
   const { phase, turn, index } = run;
-  const midi = run.steps[index]?.midi;
-  const next = run.steps[index + 1]?.midi;
+  const step = run.steps[index];
+  const next = run.steps[index + 1];
 
-  // Each new turn: play the step's tone, then listen. A step with no note
-  // skips the tone. `turn` changes exactly once per step, so this runs once.
+  // Each new turn: play the step's sound, then listen. A step with no note
+  // skips the sound. `turn` changes exactly once per step, so this runs once.
   useEffect(() => {
-    if (phase !== 'tone' || midi === undefined) return;
+    if (phase !== 'tone' || step === undefined) return;
     let current = true;
-    playThenListen(midi === null ? null : tonePlayer(midi))
+    playThenListen(stepPlayer(step))
       .catch(() => 'failed' as const)
       .then((outcome) => {
         if (!current) return;
@@ -62,11 +62,11 @@ export function ExercisePlayer({
     return () => {
       current = false;
     };
-  }, [turn, phase, midi, playThenListen]);
+  }, [turn, phase, step, playThenListen]);
 
-  // Load the next step's tone while this one is in play.
+  // Get the next step's sound ready while this one is in play.
   useEffect(() => {
-    if (typeof next === 'number') warmTone(next);
+    if (next !== undefined) stepPlayer(next);
   }, [next]);
 
   // Keep the countdown moving even if no sound arrives.

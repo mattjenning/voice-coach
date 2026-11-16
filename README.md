@@ -10,7 +10,7 @@ Everything in the app is built from one move. The app plays a note for three sec
 
 | Mode | What it does | State |
 | --- | --- | --- |
-| Quick practice | One octave of a major scale, from one of six starting notes between C2 and G4. Each note gets one attempt, then the next plays by itself. A report card follows, for the set and for the whole session, with a percent score and a letter grade. Then the scale can stay, or move down or up by one note or half an octave. | Built. Not yet run on a phone. |
+| Quick practice | Two kinds of practice across one octave, from one of six starting notes named after the voice types. **Step mode:** eight notes up a major scale, one attempt each. **Slide mode:** seven glides from one note to another, climbing, descending or random; you follow each with your voice. A report card follows each set, with a percent score and a letter grade, and the full session report lists every finished set. Then the scale can stay, or move by one note or half an octave. | Step mode has run on a phone. Slide mode has not. Volume match is planned, not built. |
 | Progression | Ten guided levels. Level 1 finds your home note, the note you sing when asked for an easy one. Every later level is built from it. Levels train pitch matching, steps, jumps, range and breath control. Progress and achievements are saved on the phone. | Built. Not yet run on a phone. |
 | Song mode | Master one song a phrase at a time, by call and response. | Design only. The screen explains the design. |
 
@@ -46,7 +46,9 @@ The check builds every note from C2 to C6 as four kinds of tone (pure, voice-lik
 | `src/components/run-view.tsx` | What a running exercise looks like: the note, the meter, the hold bar |
 | `src/components/report-card.tsx` | A report card for one set or a whole session |
 | `src/lib/exercise.ts` | The engine. An exercise is a list of steps; this is every way one can unfold. Pure logic. |
-| `src/lib/quick.ts` | Quick practice: the scale, the starting notes, the shifts |
+| `src/lib/quick.ts` | The scale, the six starting notes, the shifts |
+| `src/lib/slide.ts` | Slide mode: the sets, and the sound of a glide worked out as numbers |
+| `src/hooks/slide-sounds.ts` | Saves a slide's sound on the phone and plays it |
 | `src/lib/progression.ts` | Progression: the levels, the pass marks, the achievements |
 | `src/lib/report.ts` | What a list of results adds up to |
 | `src/lib/pitch.ts` | Pitch detection (the YIN method) and smoothing. Pure maths. |
@@ -84,24 +86,31 @@ The check for this sings a made-up six-note phrase, with vibrato, a repeated not
 - **The tone and the microphone never overlap.** On an iPhone, `expo-audio`'s microphone stream puts the phone in record-only mode, and nothing can play until the stream stops. Taking turns also keeps the app from scoring its own speaker. This is why Song mode is designed as call and response.
 - **The speaker is reset before every tone.** The microphone stream leaves the phone in a quiet "measurement" setting, and a sound that has played once sits at its end. Both made the second tone silent on a real iPhone.
 - **Reference tones are rich in overtones.** A phone speaker is silent below about 300 Hz, so a plain low note would not be heard.
+- **Slide sounds are made on the phone.** There are too many possible slides to ship a file for each, so the app works the sound out as numbers, saves it as a small file in the phone's throwaway storage, and plays that. Song mode will need the same trick to play phrases.
+- **A slide's clock starts when the singer does.** The score is the share of the slide sung within 50 cents of the moving pitch, so a slow start costs nothing but stopping early does.
 - **Missed notes earn partial credit.** A matched note scores 100. A missed one gets up to 50 for how close the best attempt came (full marks on the note, nothing a semitone away) and up to 50 for how much of the hold was done in tune. The set's score is the average, graded on the school scale: A from 90, B from 80, C from 70, D from 60.
 - **"One note" is one semitone**, the next piano key. That is how singers walk a warm-up scale up and down.
 - **Round timings came from trying it** (Matthew, 2026-11-16): a 3 second tone, 3.5 seconds of listening, 2 seconds held.
+
+## Proven on a phone
+
+On Matthew's iPhone, 2026-11-16: the microphone stream in Expo Go, the reference tone on every round, the start screen, and a full Step mode set with its report card.
 
 ## Not yet proven
 
 These need a real iPhone and have not been tried:
 
-1. That the tone plays on every round. It was silent after the first round on 2026-11-16. The fix has not been confirmed.
-2. The start screen, Quick practice and Progression. They were built after the last phone test. The screens were looked at in a browser, where the microphone does not work.
-3. How accurate the detector is on a real voice. It shows a note for one, but nobody has checked the note is right.
+1. Slide mode. Nothing about it has run on a phone: making the sound, saving it, playing it, or scoring a real voice against it.
+2. Progression. It has not been tried on a phone.
+3. How accurate the detector is on a real voice. A real set scored 92% on a phone, but nobody has checked a reading against a tuner.
 4. That progress is still there after the app is closed and opened again.
 5. `npx expo lint` has never run. The linter would not install in the build environment.
 
 ## Roadmap
 
 1. **Prove this build on a phone.** The five items above.
-2. **Song mode.** In order: score a sung phrase against a melody map, play a phrase as one sound, try the melody script on a real voice, then find a way to lift the voice out of a full song. The last one is not researched and decides which songs can be used.
-3. **More of Progression.** Slides across the bridge, loud and soft on one note, and short phrases from real songs. Slides need a new kind of step that scores a moving pitch.
+2. **Volume match.** Sing your best note and match a loudness target. It needs the microphone's loudness as well as its pitch, and a way to learn each singer's quiet and loud.
+3. **Song mode.** In order: score a sung phrase against a melody map, play a phrase as one sound, try the melody script on a real voice, then find a way to lift the voice out of a full song. The last one is not researched and decides which songs can be used.
+4. **More of Progression.** Slides across the bridge, loud and soft on one note, and short phrases from real songs. The slide step now exists, from Slide mode.
 
 Songs from streaming services cannot be analyzed, because their playback is protected. The first route is songs owned as files. Selling an app built on the melodies of commercial songs would likely need the rights cleared first; personal use does not.

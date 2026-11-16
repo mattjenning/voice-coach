@@ -16,6 +16,8 @@ import type { StepResult } from './exercise.ts';
  * was never heard scores 0.
  */
 export function noteScore(result: StepResult): number {
+  // A slide brings its own score: the share of it sung on the line.
+  if (result.score !== undefined) return result.score;
   if (result.matched) return 100;
   if (result.closestCents === null) return 0;
   const closeness = Math.max(0, 1 - Math.abs(result.closestCents) / 100);
