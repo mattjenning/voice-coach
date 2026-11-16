@@ -117,8 +117,8 @@ export function ListRow({
 }
 
 /**
- * The frame every screen shares: a turquoise banner across the very top with
- * the screen's name, which stays put, and scrolling content under it.
+ * The frame every screen shares: the screen's name in turquoise at the very
+ * top, a line about the screen, then the content. It all scrolls together.
  */
 export function Screen({
   title,
@@ -131,28 +131,26 @@ export function Screen({
   back?: boolean;
   children: ReactNode;
 }) {
-  const theme = useTheme();
   return (
     <ThemedView style={styles.screen}>
-      {/* The banner's color runs up behind the clock and battery. */}
-      <SafeAreaView edges={['top']} style={{ backgroundColor: theme.accent }}>
-        <View style={styles.banner}>
-          {back && (
-            <Pressable accessibilityRole="button" hitSlop={12} onPress={() => router.back()}>
-              <ThemedText type="smallBold" style={{ color: theme.onAccent }}>
-                ‹ Modes
-              </ThemedText>
-            </Pressable>
-          )}
-          <ThemedText type="title" style={{ color: theme.onAccent }}>
-            {title}
-          </ThemedText>
-        </View>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.header}>
+            {back && (
+              <Pressable accessibilityRole="button" hitSlop={12} onPress={() => router.back()}>
+                <ThemedText type="smallBold" themeColor="accent">
+                  ‹ Modes
+                </ThemedText>
+              </Pressable>
+            )}
+            <ThemedText type="title" themeColor="accent">
+              {title}
+            </ThemedText>
+            {subtitle !== undefined && <ThemedText themeColor="textSecondary">{subtitle}</ThemedText>}
+          </View>
+          {children}
+        </ScrollView>
       </SafeAreaView>
-      <ScrollView style={styles.body} contentContainerStyle={styles.content}>
-        {subtitle !== undefined && <ThemedText themeColor="textSecondary">{subtitle}</ThemedText>}
-        {children}
-      </ScrollView>
     </ThemedView>
   );
 }
@@ -161,15 +159,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  banner: {
-    width: '100%',
-    maxWidth: MaxContentWidth,
-    alignSelf: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.three,
-  },
-  body: {
+  safeArea: {
     flex: 1,
     width: '100%',
     maxWidth: MaxContentWidth,
@@ -177,9 +167,13 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
     paddingBottom: Spacing.six,
     gap: Spacing.four,
+  },
+  header: {
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.two,
+    gap: Spacing.one,
   },
   pressed: {
     opacity: 0.75,
