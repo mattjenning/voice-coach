@@ -10,23 +10,24 @@ import { HIGHEST_TONE, LOWEST_TONE, noteStep, type Step } from './exercise.ts';
 /** Semitones above the first note for do re mi fa sol la ti do. */
 export const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11, 12];
 
-export type StartChoice = 'bass' | 'low' | 'medium' | 'high' | 'soprano' | 'whistle';
+export type StartChoice = 'bass' | 'baritone' | 'tenor' | 'alto' | 'mezzo' | 'soprano';
 
 /**
  * Where each choice starts. Any octave counts when singing, so these only
  * set which octave the reference tones play in.
  *
- * Matthew chose these six, a fifth or a fourth apart, after singing the
- * earlier ones (2026-11-16). The names are his labels for the app, not
- * voice types: "whistle" here is G4 to G5.
+ * Matthew chose the six notes, a fifth or a fourth apart (2026-11-16). They
+ * are named after the six standard voice types, lowest to highest, because
+ * each scale sits inside that voice's usual range. The one stretch is bass:
+ * most basses bottom out near E2, and this scale starts at C2.
  */
 export const STARTS: Record<StartChoice, number> = {
   bass: 36, // C2 to C3
-  low: 43, // G2 to G3
-  medium: 48, // C3 to C4
-  high: 55, // G3 to G4
-  soprano: 60, // C4 to C5
-  whistle: 67, // G4 to G5
+  baritone: 43, // G2 to G3
+  tenor: 48, // C3 to C4
+  alto: 55, // G3 to G4
+  mezzo: 60, // C4 to C5
+  soprano: 67, // G4 to G5
 };
 
 /** The eight steps of the scale that starts on `start`. */

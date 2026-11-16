@@ -10,11 +10,11 @@ import { STARTS, scaleSteps, type StartChoice } from '@/lib/quick';
 
 const CHOICES: { choice: StartChoice; label: string }[] = [
   { choice: 'bass', label: 'Bass' },
-  { choice: 'low', label: 'Low' },
-  { choice: 'medium', label: 'Medium' },
-  { choice: 'high', label: 'High' },
+  { choice: 'baritone', label: 'Baritone' },
+  { choice: 'tenor', label: 'Tenor' },
+  { choice: 'alto', label: 'Alto' },
+  { choice: 'mezzo', label: 'Mezzo' },
   { choice: 'soprano', label: 'Soprano' },
-  { choice: 'whistle', label: 'Whistle' },
 ];
 
 const span = (start: number) => `${noteName(start)} to ${noteName(start + 12)}`;
@@ -86,8 +86,8 @@ export default function QuickPracticeScreen() {
           />
         ))}
         <ThemedText type="small" themeColor="textSecondary">
-          The same note in a higher or lower octave counts, so pick by ear. You can move up or
-          down after each set.
+          Named after the six voice types, lowest to highest. Pick the one that feels easy, not
+          the one you think you are. You can move up or down after each set.
         </ThemedText>
       </Card>
     </Screen>

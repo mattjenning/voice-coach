@@ -391,12 +391,12 @@ assert.equal(currentStep(NO_RUN), null);
 
 assert.deepEqual(MAJOR_SCALE, [0, 2, 4, 5, 7, 9, 11, 12]);
 assert.deepEqual(
-  scaleSteps(STARTS.medium).map((step) => noteName(step.midi ?? 0)),
+  scaleSteps(STARTS.tenor).map((step) => noteName(step.midi ?? 0)),
   ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4'],
 );
 assert.deepEqual(
   Object.entries(STARTS).map(([choice, start]) => `${choice} ${noteName(start)}`),
-  ['bass C2', 'low G2', 'medium C3', 'high G3', 'soprano C4', 'whistle G4'],
+  ['bass C2', 'baritone G2', 'tenor C3', 'alto G3', 'mezzo C4', 'soprano G4'],
 );
 assert.deepEqual(SHIFTS.map((shift) => shift.by), [-6, -1, 0, 1, 6]);
 
@@ -430,11 +430,11 @@ for (const start of Object.values(STARTS)) {
 }
 assert.ok(canStartOn(LOWEST_TONE) && canStartOn(HIGHEST_TONE - 12));
 assert.ok(!canStartOn(LOWEST_TONE - 1) && !canStartOn(HIGHEST_TONE - 11));
-assert.ok(!canShift(STARTS.low, -12), 'no going below the lowest tone');
-assert.ok(canShift(STARTS.low, -6) && !canShift(LOWEST_TONE, -1));
+assert.ok(!canShift(STARTS.baritone, -12), 'no going below the lowest tone');
+assert.ok(canShift(STARTS.baritone, -6) && !canShift(LOWEST_TONE, -1));
 assert.ok(!canShift(STARTS.bass, -1) && canShift(STARTS.bass, 1), 'bass is the lowest start there is');
-assert.equal(noteName(STARTS.whistle + 12), 'G5');
-assert.ok(canShift(STARTS.high, 6) && !canShift(HIGHEST_TONE - 12, 1));
+assert.equal(noteName(STARTS.soprano + 12), 'G5');
+assert.ok(canShift(STARTS.alto, 6) && !canShift(HIGHEST_TONE - 12, 1));
 for (const shift of SHIFTS) assert.ok(shift.spoken.length > 0 && shift.label.split('\n').length <= 2);
 
 // --- Progression -----------------------------------------------------------
