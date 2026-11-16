@@ -25,15 +25,32 @@ import {
 } from '../src/lib/notes.ts';
 import { PitchSmoother, detectPitch, level } from '../src/lib/pitch.ts';
 import {
-  FIRST_TARGET,
-  HIGHEST_TARGET,
-  LISTEN_MS,
-  LOWEST_TARGET,
-  START,
-  practiceReducer,
+  HIGHEST_TONE,
+  LOWEST_TONE,
+  NO_RUN,
+  currentStep,
+  noteStep,
+  runReducer,
   timeLeftMs,
-  type Practice,
-} from '../src/lib/practice.ts';
+  type Run,
+  type Step,
+  type StepResult,
+} from '../src/lib/exercise.ts';
+import {
+  LEVELS,
+  NEW_PROGRESS,
+  achievements,
+  applyResults,
+  didPass,
+  isOpen,
+  levelSteps,
+  nextLevel,
+  parseProgress,
+  usableHome,
+  type Progress,
+} from '../src/lib/progression.ts';
+import { MAJOR_SCALE, SHIFTS, STARTS, canShift, canStartOn, scaleSteps } from '../src/lib/quick.ts';
+import { grade, rangeSize, summarize } from '../src/lib/report.ts';
 import { readWav, writeWav } from '../src/lib/wav.ts';
 
 /** A repeatable stand-in for Math.random, so a failing check fails every time. */
@@ -235,88 +252,234 @@ dropped = advanceHold(dropped, false, 1000 + HOLD.graceMs + 1); // a real break
 assert.equal(dropped.heldMs, 0, 'a long break resets the count');
 assert.equal(dropped.startedAt, null);
 
-// --- A practice session ----------------------------------------------------
+// --- Exercises: a list of steps the app works through by itself -------------
 
-const targetHz = midiToHz(FIRST_TARGET);
-const sing_ = (state: Practice, hz: number | null, atMs: number) =>
-  practiceReducer(state, { type: 'pitch', hz, atMs });
+const hzOf = (midi: number, cents = 0) => midiToHz(midi) * 2 ** (cents / 1200);
+const hear = (run: Run, hz: number | null, atMs: number) =>
+  runReducer(run, { type: 'pitch', hz, atMs });
+/** Sing one pitch steadily from `from` for `ms`, a reading every 100 ms. */
+function singFor(run: Run, hz: number | null, from: number, ms: number): Run {
+  let next = run;
+  for (let at = from; at <= from + ms; at += 100) next = hear(next, hz, at);
+  return next;
+}
 
-assert.equal(START.target, FIRST_TARGET);
-assert.equal(START.phase, 'idle');
-assert.equal(sing_(START, targetHz, 0), START, 'nothing is scored before a round starts');
+assert.equal(hear(NO_RUN, 220, 0), NO_RUN, 'nothing is scored before a start');
+assert.equal(runReducer(NO_RUN, { type: 'start', steps: [] }), NO_RUN);
+assert.equal(currentStep(NO_RUN), null);
 
-// A round that is matched: tone, then listening, then two seconds in tune.
-let round: Practice = practiceReducer(START, { type: 'begin' });
-assert.equal(round.phase, 'tone');
-assert.equal(sing_(round, targetHz, 0), round, 'nothing is scored while the tone plays');
-round = practiceReducer(round, { type: 'listen', atMs: 1000 });
-assert.equal(round.phase, 'listening');
-assert.equal(round.deadlineMs, 1000 + LISTEN_MS);
-assert.equal(timeLeftMs(round), LISTEN_MS);
+{
+  // Three notes: the first matched, the second missed, the third matched an octave down.
+  const steps = [noteStep(60), noteStep(62), noteStep(64)];
+  let run = runReducer(NO_RUN, { type: 'start', steps });
+  assert.equal(run.phase, 'tone');
+  assert.equal(run.turn, 1);
+  assert.equal(currentStep(run)?.midi, 60);
+  assert.equal(hear(run, hzOf(60), 0), run, 'nothing is scored while the tone plays');
 
-round = sing_(round, targetHz * 2 ** (60 / 1200), 1200); // 60 cents sharp
-assert.equal(round.hold.heldMs, 0);
-assert.equal(Math.round(round.closest?.cents ?? 0), 60);
-round = sing_(round, targetHz * 2 ** (-30 / 1200), 1300); // closer
-assert.equal(Math.round(round.closest?.cents ?? 0), -30);
-round = sing_(round, targetHz * 2 ** (80 / 1200), 1400); // further away again
-assert.equal(Math.round(round.closest?.cents ?? 0), -30, 'the best attempt is kept');
-assert.equal(timeLeftMs(round), LISTEN_MS - 400);
+  run = runReducer(run, { type: 'listen', atMs: 1000 });
+  assert.equal(run.phase, 'listening');
+  assert.equal(timeLeftMs(run), 3500);
+  run = hear(run, hzOf(60, 60), 1100);
+  run = hear(run, hzOf(60, -30), 1200);
+  run = hear(run, hzOf(60, 80), 1300);
+  assert.equal(Math.round(run.closest?.cents ?? 0), -30, 'the best attempt is kept');
+  assert.equal(Math.round(run.reading?.cents ?? 0), 80);
+  run = singFor(run, hzOf(60, 5), 1400, 2000);
 
-for (let at = 1500; at <= 1500 + HOLD.goalMs; at += 100) round = sing_(round, targetHz, at);
-assert.equal(round.phase, 'idle', 'matching ends the round at once');
-assert.equal(round.result, 'matched');
-assert.equal(round.matched, 1);
-assert.ok(round.hold.done);
-assert.equal(sing_(round, targetHz, 9000), round, 'a finished round ignores more singing');
-assert.equal(timeLeftMs(round), 0);
+  assert.equal(run.phase, 'tone', 'a match moves straight to the next tone');
+  assert.equal(run.index, 1);
+  assert.equal(run.turn, 2);
+  assert.equal(run.results.length, 1);
+  assert.ok(run.results[0].matched);
+  assert.equal(run.results[0].sungMidi, 60);
+  assert.equal(run.results[0].heldMs, 2000);
+  assert.equal(run.hz, null, 'the new step starts clean');
+  assert.equal(run.closest, null);
 
-// The next round starts clean on another note and keeps the count.
-round = practiceReducer(round, { type: 'begin', midi: round.target + 1 });
-assert.equal(round.target, FIRST_TARGET + 1);
-assert.equal(round.phase, 'tone');
-assert.equal(round.result, null);
-assert.equal(round.hold.heldMs, 0);
-assert.equal(round.closest, null);
-assert.equal(round.matched, 1);
-assert.equal(practiceReducer(round, { type: 'target', midi: 60 }), round, 'no changing note mid-round');
+  run = runReducer(run, { type: 'listen', atMs: 10_000 });
+  run = hear(run, hzOf(62, 45), 11_000);
+  run = singFor(run, hzOf(62), 12_800, 700); // in tune, but too late to hold two seconds
+  assert.equal(run.index, 2, 'time ran out and it moved on');
+  assert.ok(!run.results[1].matched);
+  assert.equal(Math.round(run.results[1].closestCents ?? 99), 0);
+  assert.equal(run.results[1].heldMs, 700);
 
-// A round that runs out of time, with the last reading arriving late.
-let late: Practice = practiceReducer(START, { type: 'begin' });
-late = practiceReducer(late, { type: 'listen', atMs: 0 });
-late = sing_(late, targetHz * 2 ** (40 / 1200), 1000);
-late = sing_(late, targetHz, LISTEN_MS - 500); // in tune, but too late to hold two seconds
-assert.equal(late.phase, 'listening');
-late = sing_(late, targetHz, LISTEN_MS);
-assert.equal(late.phase, 'idle');
-assert.equal(late.result, 'missed');
-assert.equal(late.matched, 0);
-assert.equal(late.hz, null);
-assert.equal(Math.round(late.closest?.cents ?? 99), 0, 'the best attempt survives the round');
+  run = runReducer(run, { type: 'listen', atMs: 20_000 });
+  run = singFor(run, hzOf(52), 20_100, 2000); // E3 for an E4 target
+  assert.equal(run.phase, 'done');
+  assert.equal(run.turn, 3, 'no tone is due after the last step');
+  assert.ok(run.results[2].matched, 'the same note an octave down counts');
+  assert.equal(run.results[2].sungMidi, 52, 'and the report knows which octave was really sung');
+  assert.equal(currentStep(run), null);
+  assert.equal(hear(run, 220, 99_999), run);
 
-// Silence all the way through: only the clock ends it.
-let silent: Practice = practiceReducer(START, { type: 'begin' });
-silent = practiceReducer(silent, { type: 'listen', atMs: 0 });
-silent = practiceReducer(silent, { type: 'tick', atMs: 2000 });
-assert.equal(silent.phase, 'listening');
-assert.equal(timeLeftMs(silent), LISTEN_MS - 2000);
-silent = practiceReducer(silent, { type: 'tick', atMs: LISTEN_MS + 50 });
-assert.equal(silent.result, 'missed');
-assert.equal(silent.closest, null);
-assert.equal(practiceReducer(silent, { type: 'tick', atMs: 99_999 }), silent);
+  const card = summarize(run.results);
+  assert.equal(card.attempted, 3);
+  assert.equal(card.matched, 2);
+  assert.equal(card.lowestSung, 52);
+  assert.equal(card.highestSung, 60);
+  assert.equal(rangeSize(card), 9);
+  assert.equal(card.longestHoldMs, 2000);
+  assert.ok(card.averageOffCents !== null && card.averageOffCents < 5);
+  assert.equal(grade(card), 'B');
 
-// Stopping by hand clears the round without a result.
-let stopped: Practice = practiceReducer(START, { type: 'begin' });
-stopped = practiceReducer(stopped, { type: 'stop' });
-assert.equal(stopped.phase, 'idle');
-assert.equal(stopped.result, null);
-assert.equal(practiceReducer(stopped, { type: 'listen', atMs: 5 }), stopped, 'a late tone does not restart it');
+  // A second set starts a fresh run, and the session report joins both.
+  const again = runReducer(run, { type: 'start', steps });
+  assert.equal(again.results.length, 0);
+  assert.equal(again.turn, 4, 'a new start is a new turn, so the tone plays');
+  assert.equal(summarize([...run.results, ...run.results]).attempted, 6);
+}
 
-// Choosing a note between rounds.
-assert.equal(practiceReducer(START, { type: 'target', midi: 200 }).target, HIGHEST_TARGET);
-assert.equal(practiceReducer(START, { type: 'target', midi: -5 }).target, LOWEST_TARGET);
-assert.equal(practiceReducer(START, { type: 'begin', midi: 999 }).target, HIGHEST_TARGET);
-assert.equal(practiceReducer(late, { type: 'target', midi: 50 }).result, null);
+{
+  // Silence all the way: only the clock moves it on.
+  let run = runReducer(NO_RUN, { type: 'start', steps: [noteStep(60), noteStep(62)] });
+  run = runReducer(run, { type: 'listen', atMs: 0 });
+  run = runReducer(run, { type: 'tick', atMs: 2000 });
+  assert.equal(timeLeftMs(run), 1500);
+  run = runReducer(run, { type: 'tick', atMs: 3600 });
+  assert.equal(run.index, 1);
+  assert.deepEqual(
+    [run.results[0].matched, run.results[0].closestCents, run.results[0].sungMidi],
+    [false, null, null],
+  );
+  const stopped = runReducer(run, { type: 'stop' });
+  assert.equal(stopped.phase, 'ready');
+  assert.equal(stopped.results.length, 0);
+  assert.equal(runReducer(stopped, { type: 'listen', atMs: 5 }), stopped, 'a late tone does not restart it');
+  assert.equal(summarize([]).averageOffCents, null);
+  assert.equal(grade(summarize([])), null);
+}
+
+{
+  // A long hold needs the whole time, and a wobble out of tune starts it over.
+  const step: Step = { midi: 57, holdMs: 5000, listenMs: 9000 };
+  let run = runReducer(NO_RUN, { type: 'start', steps: [step] });
+  run = runReducer(run, { type: 'listen', atMs: 0 });
+  run = singFor(run, hzOf(57), 0, 3000);
+  assert.equal(run.phase, 'listening', 'two seconds is not enough here');
+  run = singFor(run, hzOf(57, 70), 3100, 500);
+  assert.equal(run.hold.heldMs, 0);
+  run = singFor(run, hzOf(57), 3700, 5000);
+  assert.equal(run.phase, 'done');
+  assert.ok(run.results[0].matched);
+  assert.equal(run.results[0].heldMs, 5000);
+}
+
+{
+  // "Any steady note": no target. Sliding around does not count; settling does.
+  const step: Step = { midi: null, holdMs: 2000, listenMs: 8000 };
+  let run = runReducer(NO_RUN, { type: 'start', steps: [step] });
+  run = runReducer(run, { type: 'listen', atMs: 0 });
+  run = singFor(run, hzOf(50), 0, 1000);
+  assert.equal(run.settledMidi, 50);
+  run = singFor(run, hzOf(53, 20), 1100, 1500); // moved to another note: count restarts
+  assert.equal(run.phase, 'listening');
+  assert.equal(run.settledMidi, 53);
+  run = singFor(run, hzOf(53, -10), 2700, 600);
+  assert.equal(run.phase, 'done');
+  assert.ok(run.results[0].matched);
+  assert.equal(run.results[0].sungMidi, 53);
+}
+
+// --- Quick practice --------------------------------------------------------
+
+assert.deepEqual(MAJOR_SCALE, [0, 2, 4, 5, 7, 9, 11, 12]);
+assert.deepEqual(
+  scaleSteps(STARTS.medium).map((step) => noteName(step.midi ?? 0)),
+  ['E3', 'F♯3', 'G♯3', 'A3', 'B3', 'C♯4', 'D♯4', 'E4'],
+);
+assert.deepEqual(SHIFTS.map((shift) => shift.by), [-12, -6, 0, 6, 12]);
+for (const start of Object.values(STARTS)) {
+  assert.ok(canStartOn(start));
+  assert.ok(canShift(start, 0));
+}
+assert.ok(canStartOn(LOWEST_TONE) && canStartOn(HIGHEST_TONE - 12));
+assert.ok(!canStartOn(LOWEST_TONE - 1) && !canStartOn(HIGHEST_TONE - 11));
+assert.ok(!canShift(STARTS.low, -12), 'no going below the lowest tone');
+assert.ok(canShift(STARTS.low, -6));
+assert.ok(canShift(STARTS.high, 12) && !canShift(STARTS.high + 12, 6));
+
+// --- Progression -----------------------------------------------------------
+
+{
+  const result = (step: Step, matched: boolean, sungMidi: number | null, heldMs = 2000): StepResult => ({
+    step,
+    matched,
+    closestCents: matched ? 3 : 60,
+    sungMidi,
+    heldMs,
+  });
+  const pass = (progress: Progress, id: string, sungAbove = 0): Progress => {
+    const level = LEVELS.find((each) => each.id === id)!;
+    const steps = levelSteps(progress, level);
+    const results = steps.map((step) =>
+      result(step, true, (step.midi ?? 50) + sungAbove, step.holdMs),
+    );
+    return applyResults(progress, level, results);
+  };
+
+  assert.equal(new Set(LEVELS.map((level) => level.id)).size, LEVELS.length, 'level ids are unique');
+  assert.equal(nextLevel(NEW_PROGRESS)?.id, 'home');
+  assert.ok(isOpen(NEW_PROGRESS, LEVELS[0]) && !isOpen(NEW_PROGRESS, LEVELS[1]));
+  assert.deepEqual(parseProgress(null), NEW_PROGRESS);
+  assert.deepEqual(parseProgress('not json'), NEW_PROGRESS);
+  assert.deepEqual(parseProgress('{"home":"x","passed":["home","made-up"]}').passed, ['home']);
+
+  // Every level's notes have a tone, for the lowest and highest usable home notes.
+  assert.equal(usableHome(50), 50);
+  assert.equal(usableHome(30), 54, 'a very low home note moves up by octaves');
+  assert.equal(usableHome(80), 68, 'and a very high one moves down');
+  for (const home of [usableHome(0), usableHome(127), 50]) {
+    for (const level of LEVELS) {
+      const steps = level.steps(home);
+      assert.ok(level.passMark >= 1 && level.passMark <= steps.length, `${level.id} pass mark`);
+      for (const step of steps) {
+        assert.ok(step.listenMs > step.holdMs, `${level.id} leaves time to find the note`);
+        if (step.midi !== null) {
+          assert.ok(step.midi >= LOWEST_TONE && step.midi <= HIGHEST_TONE, `${level.id} ${step.midi}`);
+        }
+      }
+    }
+  }
+
+  // Level 1 sets the home note. A failed try changes nothing but the records.
+  const homeLevel = LEVELS[0];
+  const homeStep = homeLevel.steps(0)[0];
+  const failed = applyResults(NEW_PROGRESS, homeLevel, [result(homeStep, false, null, 400)]);
+  assert.equal(failed.home, null);
+  assert.deepEqual(failed.passed, []);
+  let progress = applyResults(NEW_PROGRESS, homeLevel, [result(homeStep, true, 50)]);
+  assert.equal(progress.home, 50);
+  assert.deepEqual(progress.passed, ['home']);
+  assert.equal(nextLevel(progress)?.id, 'match');
+  assert.deepEqual(levelSteps(progress, LEVELS[1]).map((step) => step.midi), [50]);
+  assert.ok(isOpen(progress, LEVELS[1]) && !isOpen(progress, LEVELS[2]));
+
+  // A level below its pass mark is not passed; trying again does not double-count.
+  const three = LEVELS.find((level) => level.id === 'three-up')!;
+  const threeSteps = levelSteps(progress, three);
+  const oneOfThree = [result(threeSteps[0], true, 50), result(threeSteps[1], false, null), result(threeSteps[2], false, null)];
+  assert.ok(!didPass(three, oneOfThree));
+  progress = pass(progress, 'match');
+  progress = pass(pass(progress, 'match'), 'three-up');
+  assert.deepEqual(progress.passed, ['home', 'match', 'three-up']);
+
+  const earned = (state: Progress) =>
+    achievements(state).filter((each) => each.earned).map((each) => each.title);
+  assert.deepEqual(earned(NEW_PROGRESS), []);
+  assert.deepEqual(earned(progress), ['First note', 'On pitch']);
+  progress = pass(pass(progress, 'five-up-back'), 'hold-5');
+  assert.equal(progress.longestHoldMs, 5000);
+  assert.ok(earned(progress).includes('Steady breath') && !earned(progress).includes('Long breath'));
+  progress = pass(progress, 'octave');
+  assert.equal(progress.highestSung, 62);
+  assert.ok(earned(progress).includes('Full octave') && earned(progress).includes('Octave range'));
+  for (const id of ['jumps', 'hold-10', 'reach-down', 'reach-up']) progress = pass(progress, id);
+  assert.equal(nextLevel(progress), null, 'every level can be passed');
+  assert.equal(earned(progress).length, achievements(progress).length);
+  assert.deepEqual(parseProgress(JSON.stringify(progress)), progress, 'progress survives saving');
+}
 
 // --- Sound files -----------------------------------------------------------
 

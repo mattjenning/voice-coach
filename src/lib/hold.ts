@@ -9,7 +9,7 @@ import { centsBetween, midiToHz } from './notes.ts';
 export const HOLD = {
   /** Within this many cents of the target counts as in tune. A semitone is 100. */
   toleranceCents: 25,
-  /** Hold in tune this long to pass. */
+  /** Hold in tune this long to pass, unless an exercise asks for longer. */
   goalMs: 2000,
   /** A slip shorter than this does not reset the count. */
   graceMs: 250,
@@ -27,7 +27,7 @@ export type TargetReading = {
  * Compare a sung pitch with a target note.
  *
  * With `anyOctave` on, the same note in a higher or lower octave counts.
- * A low voice can then practise a note written for a high one, which is how
+ * A low voice can then practice a note written for a high one, which is how
  * people sing along to songs outside their range.
  */
 export function compareToTarget(hz: number, targetMidi: number, anyOctave = true): TargetReading {
@@ -57,12 +57,17 @@ export const NOT_HOLDING: HoldState = {
  * Move the hold count forward by one reading.
  * `inTune` is false for an off note and for silence alike.
  */
-export function advanceHold(state: HoldState, inTune: boolean, nowMs: number): HoldState {
+export function advanceHold(
+  state: HoldState,
+  inTune: boolean,
+  nowMs: number,
+  goalMs: number = HOLD.goalMs,
+): HoldState {
   if (state.done) return state;
   if (inTune) {
     const startedAt = state.startedAt ?? nowMs;
     const heldMs = nowMs - startedAt;
-    return { startedAt, lastInTuneAt: nowMs, heldMs, done: heldMs >= HOLD.goalMs };
+    return { startedAt, lastInTuneAt: nowMs, heldMs, done: heldMs >= goalMs };
   }
   const slipping =
     state.lastInTuneAt !== null && nowMs - state.lastInTuneAt <= HOLD.graceMs;

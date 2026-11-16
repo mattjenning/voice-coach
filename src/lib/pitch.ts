@@ -91,7 +91,7 @@ export function detectPitch(
   if (best === -1) return null;
 
   // Step 4: the true period usually falls between two samples. Fit a curve
-  // through the dip and its two neighbours to find the real low point.
+  // through the dip and its two neighbors to find the real low point.
   let period = best;
   if (best > 1 && best < longest) {
     const before = normalized[best - 1];

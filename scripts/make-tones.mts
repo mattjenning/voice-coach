@@ -13,11 +13,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 import { midiToHz, noteName } from '../src/lib/notes.ts';
-import { HIGHEST_TARGET, LOWEST_TARGET } from '../src/lib/practice.ts';
+import { HIGHEST_TONE, LOWEST_TONE } from '../src/lib/exercise.ts';
 import { writeWav } from '../src/lib/wav.ts';
 
-const LOWEST = LOWEST_TARGET;
-const HIGHEST = HIGHEST_TARGET;
+const LOWEST = LOWEST_TONE;
+const HIGHEST = HIGHEST_TONE;
 const RATE = 12_000;
 const SECONDS = 3;
 const OVERTONES = [1, 0.71, 0.58, 0.5, 0.45, 0.41, 0.38, 0.35];

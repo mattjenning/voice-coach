@@ -3,7 +3,7 @@
  * with a start and an end time.
  *
  * It works in two steps. First, track the pitch across the recording, one
- * reading every 32 milliseconds. Second, group neighbouring readings that
+ * reading every 32 milliseconds. Second, group neighboring readings that
  * sit on the same note. A singer's pitch wobbles (vibrato) and slides
  * between notes, so the grouping allows some wobble and drops the slides.
  *
@@ -60,7 +60,7 @@ export function trackPitch(samples: Float32Array, sampleRate: number): PitchTrac
 }
 
 /**
- * Replace each reading with the middle value of itself and its neighbours.
+ * Replace each reading with the middle value of itself and its neighbors.
  * A single wrong reading, such as a jump of an octave, disappears.
  */
 export function steady(points: PitchPoint[], width = 5): PitchPoint[] {

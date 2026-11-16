@@ -34,12 +34,13 @@ export type PitchListener = {
   /** What went wrong, when status is 'failed'. */
   problem: string | null;
   /**
-   * Play a sound to its end, then turn the microphone on.
+   * Play a sound to its end, then turn the microphone on. Pass null to turn
+   * the microphone on with no sound first.
    *
    * The two cannot overlap. On an iPhone this kind of microphone stream puts
    * the phone in record-only mode, and nothing plays until it stops.
    */
-  playThenListen: (player: AudioPlayer) => Promise<RoundStart>;
+  playThenListen: (player: AudioPlayer | null) => Promise<RoundStart>;
   /** Turn everything off: the sound if it is playing, the microphone if it is on. */
   stop: () => void;
 };
@@ -153,59 +154,64 @@ export function usePitch(onPitch: (hz: number | null, atMs: number) => void): Pi
     setStatus((current) => (current === 'on' ? 'off' : current));
   }, [stream]);
 
-  const playThenListen = async (player: AudioPlayer): Promise<RoundStart> => {
-    stop();
-    const mine = run.current;
-    const fail = (error: unknown): RoundStart => {
-      setProblem(error instanceof Error ? error.message : String(error));
-      setStatus('failed');
-      return 'failed';
-    };
+  const playThenListen = useCallback(
+    async (player: AudioPlayer | null): Promise<RoundStart> => {
+      stop();
+      const mine = run.current;
+      const fail = (error: unknown): RoundStart => {
+        setProblem(error instanceof Error ? error.message : String(error));
+        setStatus('failed');
+        return 'failed';
+      };
 
-    // On the web, this version of expo-audio hands back no stream at all.
-    if (!stream) {
-      setStatus('unsupported');
-      return 'failed';
-    }
-    setProblem(null);
-    setStatus('off');
-
-    // Ask for the microphone first, so the question never lands on top of the tone.
-    try {
-      const permission = await requestRecordingPermissionsAsync();
-      if (!permission.granted) {
-        setStatus('denied');
+      // On the web, this version of expo-audio hands back no stream at all.
+      if (!stream) {
+        setStatus('unsupported');
         return 'failed';
       }
-    } catch (error) {
-      return fail(error);
-    }
-    if (mine !== run.current) return 'cancelled';
+      setProblem(null);
+      setStatus('off');
 
-    await switchToSpeaker();
-    if (mine !== run.current) return 'cancelled';
+      // Ask for the microphone first, so the question never lands on top of the tone.
+      try {
+        const permission = await requestRecordingPermissionsAsync();
+        if (!permission.granted) {
+          setStatus('denied');
+          return 'failed';
+        }
+      } catch (error) {
+        return fail(error);
+      }
+      if (mine !== run.current) return 'cancelled';
 
-    await new Promise<void>((resolve) => {
-      sound.current = { player, giveUp: playToEnd(player, resolve) };
-    });
-    if (mine !== run.current) return 'cancelled';
-    sound.current = null;
+      if (player !== null) {
+        await switchToSpeaker();
+        if (mine !== run.current) return 'cancelled';
 
-    try {
-      framer.current?.reset();
-      smoother.current?.reset();
-      // Starting the stream puts the phone in record-only mode.
-      await stream.start();
-    } catch (error) {
-      return fail(error);
-    }
-    if (mine !== run.current) {
-      if (stream.isStreaming) stream.stop();
-      return 'cancelled';
-    }
-    setStatus('on');
-    return 'listening';
-  };
+        await new Promise<void>((resolve) => {
+          sound.current = { player, giveUp: playToEnd(player, resolve) };
+        });
+        if (mine !== run.current) return 'cancelled';
+        sound.current = null;
+      }
+
+      try {
+        framer.current?.reset();
+        smoother.current?.reset();
+        // Starting the stream puts the phone in record-only mode.
+        await stream.start();
+      } catch (error) {
+        return fail(error);
+      }
+      if (mine !== run.current) {
+        if (stream.isStreaming) stream.stop();
+        return 'cancelled';
+      }
+      setStatus('on');
+      return 'listening';
+    },
+    [stream, stop],
+  );
 
   // Stop when the app leaves the screen. A microphone left running in the
   // background is the kind of surprise nobody wants.
