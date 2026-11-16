@@ -25,8 +25,7 @@ const MODES: Mode[] = [
   {
     href: '/song',
     title: 'Song mode',
-    line: 'Master one song, a phrase at a time.',
-    note: 'Not built yet. Open it to read the plan.',
+    line: 'Master Amazing Grace a line at a time. The app sings, then you do.',
   },
 ];
 

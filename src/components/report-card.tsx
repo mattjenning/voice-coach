@@ -28,7 +28,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 /** What went wrong on a missed note, in a few words. */
 function attempt(result: StepResult): string {
   if (result.closestCents === null) return 'not heard';
-  if (result.step.slide !== undefined) return `${Math.round(result.closestCents)} cents off`;
+  if (result.score !== undefined) return `${Math.round(result.closestCents)} cents off on average`;
   if (Math.abs(result.closestCents) <= HOLD.toleranceCents) return 'in tune, not held';
   return formatCents(result.closestCents, HOLD.toleranceCents);
 }

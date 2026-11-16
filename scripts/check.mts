@@ -57,6 +57,19 @@ import {
 import { MAJOR_SCALE, SHIFTS, STARTS, canShift, canStartOn, scaleSteps } from '../src/lib/quick.ts';
 import { grade, noteScore, rangeSize, summarize } from '../src/lib/report.ts';
 import { DIFFICULTY, pathSound, slideSteps, stepLabel } from '../src/lib/slide.ts';
+import {
+  AMAZING_GRACE,
+  PASSES_TO_MASTER,
+  addPasses,
+  isClean,
+  lineMastered,
+  lineStep,
+  nextLine,
+  noPasses,
+  parsePasses,
+  songMastered,
+  songSteps,
+} from '../src/lib/song.ts';
 import { readWav, writeWav } from '../src/lib/wav.ts';
 
 /** A repeatable stand-in for Math.random, so a failing check fails every time. */
@@ -555,6 +568,98 @@ assert.equal(currentStep(NO_RUN), null);
   let peak = 0;
   for (const value of sound) peak = Math.max(peak, Math.abs(value));
   assert.ok(Math.abs(peak - 0.9) < 0.001);
+}
+
+// --- Song mode -------------------------------------------------------------
+
+{
+  const song = AMAZING_GRACE;
+  assert.equal(song.lines.length, 4);
+  const names = (index: number) => song.lines[index].notes.map((note) => noteName(note.midi)).join(' ');
+  assert.equal(names(0), 'D4 G4 B4 G4 B4 A4 G4 E4 D4');
+  assert.equal(names(1), 'D4 G4 B4 G4 B4 A4 D5');
+  assert.equal(names(2), 'B4 D5 B4 G4 D4 E4 G4 E4 D4');
+  assert.equal(names(3), 'D4 G4 B4 G4 B4 A4 G4');
+  // The tune uses only five notes. Each line is a pickup beat and then three bars of three:
+  // twelve beats where the last note is cut short for the next pickup, ten where it is held.
+  const used = new Set(song.lines.flatMap((each) => each.notes.map((note) => note.midi % 12)));
+  assert.deepEqual([...used].sort((a, b) => a - b), [2, 4, 7, 9, 11]);
+  for (const each of song.lines) {
+    const beats = each.notes.reduce((sum, note) => sum + note.ms, 0) / 700;
+    assert.ok([10, 12].includes(beats), `"${each.words}" is ${beats} beats`);
+    for (const note of each.notes) {
+      assert.ok(note.midi >= LOWEST_TONE && note.midi <= HIGHEST_TONE);
+    }
+  }
+
+  const first = lineStep(song, 0);
+  const path = stepPath(first)!;
+  assert.equal(stepLabel(first), 'Line 1');
+  assert.equal(path.totalMs, 12 * 700);
+  assert.deepEqual(path.starts.slice(0, 4), [0, 700, 2100, 2450]);
+  assert.equal(path.midiAt(0), 62);
+  assert.equal(path.midiAt(699), 62);
+  assert.equal(path.midiAt(700), 67, 'the second note starts on the beat');
+  assert.equal(path.midiAt(2200), 71);
+  assert.equal(path.midiAt(2500), 67);
+  assert.equal(path.midiAt(99_999), 62, 'after the end, the last note');
+  assert.equal(songSteps(song).length, 4);
+
+  // The sound of the line, fed back through the melody mapper, is the line.
+  const sound = pathSound(path, 12_000);
+  const mapped = mapMelody(sound, 12_000, 'line 1').notes.map((note) => noteName(note.midi)).join(' ');
+  assert.equal(mapped, names(0), 'the app plays the right tune');
+
+  /** Sing a line: `pitchAt` gives the note number sung at each moment, or null. */
+  const singLine = (index: number, pitchAt: (tMs: number) => number | null) => {
+    const step = lineStep(song, index);
+    let run = runReducer(NO_RUN, { type: 'start', steps: [step] });
+    run = runReducer(run, { type: 'listen', atMs: 0 });
+    for (let at = 500; run.phase === 'listening' && at < 30_000; at += 100) {
+      const midi = pitchAt(at - 500);
+      run = hear(run, midi === null ? null : hzOf(midi), at);
+    }
+    return run.results[0];
+  };
+  const perfect = singLine(0, (t) => path.midiAt(t));
+  assert.equal(perfect.score, 100);
+  assert.ok(isClean(perfect));
+  const octaveDown = singLine(0, (t) => path.midiAt(t) - 12);
+  assert.equal(octaveDown.score, 100, 'a low voice sings it an octave down');
+  // A fifth of a second behind the beat loses the start of every note, but not the line.
+  const dragging = singLine(0, (t) => path.midiAt(Math.max(0, t - 200)));
+  assert.ok((dragging.score ?? 0) >= 70 && (dragging.score ?? 0) < 100, `dragging scored ${dragging.score}`);
+  assert.ok(isClean(dragging));
+  // One wrong note in nine is still clean. Droning on the first note is not.
+  const oneWrong = singLine(0, (t) => (t >= 3500 && t < 4200 ? 72 : path.midiAt(t)));
+  assert.ok(isClean(oneWrong) && (oneWrong.score ?? 0) < 100);
+  const drone = singLine(0, () => 62);
+  assert.ok(!isClean(drone), `droning scored ${drone.score}`);
+  assert.ok(!isClean(singLine(0, () => null)));
+
+  // Mastery: three clean passes a line.
+  let passes = noPasses(song);
+  assert.deepEqual(passes, [0, 0, 0, 0]);
+  assert.equal(nextLine(passes), 0);
+  passes = addPasses(passes, 0, [perfect]);
+  passes = addPasses(passes, 0, [drone]);
+  assert.deepEqual(passes, [1, 0, 0, 0], 'only a clean pass counts');
+  passes = addPasses(passes, 0, [perfect, perfect, drone, perfect]); // the whole song at once
+  assert.deepEqual(passes, [2, 1, 0, 1]);
+  passes = addPasses(passes, 2, [perfect]);
+  assert.deepEqual(passes, [2, 1, 1, 1], 'a single line counts for its own line');
+  for (let i = 0; i < 5; i++) passes = addPasses(passes, 0, [perfect]);
+  assert.equal(passes[0], PASSES_TO_MASTER, 'the count stops at mastered');
+  assert.ok(lineMastered(passes, 0) && !lineMastered(passes, 1));
+  assert.equal(nextLine(passes), 1);
+  assert.ok(!songMastered(passes));
+  for (let i = 0; i < 3; i++) passes = addPasses(passes, 0, [perfect, perfect, perfect, perfect]);
+  assert.ok(songMastered(passes));
+  assert.equal(nextLine(passes), null);
+  assert.deepEqual(parsePasses(song, JSON.stringify(passes)), passes);
+  assert.deepEqual(parsePasses(song, null), [0, 0, 0, 0]);
+  assert.deepEqual(parsePasses(song, '"x"'), [0, 0, 0, 0]);
+  assert.deepEqual(parsePasses(song, '[2,"x",99]'), [2, 0, 3, 0]);
 }
 
 // --- Quick practice --------------------------------------------------------

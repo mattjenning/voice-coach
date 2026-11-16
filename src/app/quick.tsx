@@ -149,7 +149,7 @@ export default function PracticeScreen() {
             Moves the whole scale. One note is the next piano key. That set was {span(start)}.
           </ThemedText>
         </Card>
-        <Button label="Change mode" onPress={() => setView({ name: 'menu' })} />
+        <Button label="Change practice mode" onPress={() => setView({ name: 'menu' })} />
       </Screen>
     );
   }
@@ -218,7 +218,7 @@ export default function PracticeScreen() {
             the one you think you are. You can move up or down after each set.
           </ThemedText>
         </Card>
-        <Button label="Change mode" onPress={() => setView({ name: 'menu' })} />
+        <Button label="Change practice mode" onPress={() => setView({ name: 'menu' })} />
       </Screen>
     );
   }
