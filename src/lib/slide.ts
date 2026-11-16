@@ -20,14 +20,17 @@ export type Difficulty = 'easy' | 'medium' | 'hard';
  * What each difficulty allows. A "step" is one note of the scale, so three
  * steps from C is F. Harder slides travel further, and get longer to do it.
  */
-export const DIFFICULTY: Record<Difficulty, { maxSteps: number; extraMs: number; turns: boolean }> = {
-  easy: { maxSteps: 1, extraMs: 0, turns: false },
-  medium: { maxSteps: 3, extraMs: 1000, turns: false },
-  /** Hard slides may also change direction once: out to a note and back. */
-  hard: { maxSteps: 5, extraMs: 2000, turns: true },
+export const DIFFICULTY: Record<
+  Difficulty,
+  { minSteps: number; maxSteps: number; extraMs: number; turns: boolean }
+> = {
+  easy: { minSteps: 1, maxSteps: 1, extraMs: 0, turns: false },
+  medium: { minSteps: 1, maxSteps: 3, extraMs: 1000, turns: false },
+  /** Hard slides always travel at least three steps, and may change direction once. */
+  hard: { minSteps: 3, maxSteps: 5, extraMs: 2000, turns: true },
 };
 
-/** On hard, about this share of random slides turn round and come back. */
+/** On hard, about this share of random slides turn round part way. */
 const TURN_SHARE = 0.4;
 
 /**
@@ -43,30 +46,33 @@ export function slideSteps(
 ): Step[] {
   const scale = MAJOR_SCALE.map((above) => start + above);
   const top = scale.length - 1;
-  const { maxSteps, extraMs, turns } = DIFFICULTY[difficulty];
-  const size = () => 1 + Math.floor(random() * maxSteps);
-  /** A note `steps` away from `from`, the other way if that runs off the scale. */
-  const reach = (from: number, steps: number, upward: boolean): number => {
-    const way = upward ? 1 : -1;
-    const there = from + way * steps;
-    if (there >= 0 && there <= top) return there;
-    const back = from - way * steps;
-    if (back >= 0 && back <= top) return back;
-    return upward ? (from === top ? 0 : top) : from === 0 ? top : 0;
-  };
+  const { minSteps, maxSteps, extraMs, turns } = DIFFICULTY[difficulty];
+  const size = () => minSteps + Math.floor(random() * (maxSteps - minSteps + 1));
   const steps: Step[] = [];
   for (let i = 0; i < top; i++) {
+    const far = size();
     if (order === 'up') {
-      steps.push(slideStep(scale[i], scale[Math.min(top, i + size())], undefined, extraMs));
+      // Near the top there is no room left to climb, so start low enough to fit.
+      const from = Math.min(i, top - far);
+      steps.push(slideStep(scale[from], scale[from + far], undefined, extraMs));
     } else if (order === 'down') {
-      steps.push(slideStep(scale[top - i], scale[Math.max(0, top - i - size())], undefined, extraMs));
+      const from = Math.max(top - i, far);
+      steps.push(slideStep(scale[from], scale[from - far], undefined, extraMs));
     } else {
-      const from = Math.floor(random() * scale.length);
-      const far = reach(from, size(), random() < 0.5);
+      // Start anywhere the slide fits, going up or down.
+      const upward = random() < 0.5;
+      const from = upward
+        ? Math.floor(random() * (top - far + 1))
+        : far + Math.floor(random() * (top - far + 1));
+      const turn = upward ? from + far : from - far;
       if (turns && random() < TURN_SHARE) {
-        steps.push(slideStep(scale[from], scale[from], scale[far], extraMs));
+        // Out, then back the other way. The way back need not be as far as
+        // the way out: it is its own size, cut short only by the end of the scale.
+        const room = upward ? turn : top - turn;
+        const back = Math.min(size(), room);
+        steps.push(slideStep(scale[from], scale[upward ? turn - back : turn + back], scale[turn], extraMs));
       } else {
-        steps.push(slideStep(scale[from], scale[far], undefined, extraMs));
+        steps.push(slideStep(scale[from], scale[turn], undefined, extraMs));
       }
     }
   }

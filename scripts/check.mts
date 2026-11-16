@@ -529,7 +529,9 @@ assert.equal(currentStep(NO_RUN), null);
   for (const level of ['easy', 'medium', 'hard'] as const) {
     const rule = DIFFICULTY[level];
     let turning = 0;
+    let uneven = 0;
     let longest = 0;
+    let shortest = 99;
     for (const order of ['up', 'down', 'random'] as const) {
       for (let seed = 1; seed <= 30; seed++) {
         const set = slideSteps(48, order, level, seeded(seed));
@@ -538,13 +540,22 @@ assert.equal(currentStep(NO_RUN), null);
           const far = each.slide!.viaMidi ?? each.slide!.toMidi;
           const travelled = Math.abs(scaleIndex(far) - scaleIndex(each.midi ?? -1));
           assert.ok(scaleIndex(far) >= 0 && scaleIndex(each.midi ?? -1) >= 0, 'stays on the scale');
-          assert.ok(travelled >= 1 && travelled <= rule.maxSteps, `${level} ${order}: ${stepLabel(each)}`);
+          assert.ok(
+            travelled >= rule.minSteps && travelled <= rule.maxSteps,
+            `${level} ${order}: ${stepLabel(each)}`,
+          );
           assert.equal(each.slide!.glideMs, SLIDE_SHAPE.glideMs + rule.extraMs);
           longest = Math.max(longest, travelled);
+          shortest = Math.min(shortest, travelled);
           if (each.slide!.viaMidi !== undefined) {
             turning++;
             assert.equal(order, 'random', 'only random slides turn');
-            assert.equal(each.slide!.toMidi, each.midi, 'a turning slide comes back to where it started');
+            // Out one way, back the other, and the way back is its own size.
+            const out = scaleIndex(far) - scaleIndex(each.midi ?? -1);
+            const back = scaleIndex(each.slide!.toMidi) - scaleIndex(far);
+            assert.ok(out * back < 0, `${stepLabel(each)} turns round`);
+            assert.ok(Math.abs(back) >= rule.minSteps && Math.abs(back) <= rule.maxSteps, stepLabel(each));
+            if (Math.abs(back) !== Math.abs(out)) uneven++;
           } else if (order !== 'random') {
             assert.equal(far > (each.midi ?? 0), order === 'up', `${order} slides go ${order}`);
           }
@@ -552,6 +563,8 @@ assert.equal(currentStep(NO_RUN), null);
       }
     }
     assert.equal(longest, rule.maxSteps, `${level} uses its whole reach`);
+    assert.equal(shortest, rule.minSteps, `${level} never moves less than ${rule.minSteps}`);
+    if (rule.turns) assert.ok(uneven > 10, 'many turning slides come back a different distance');
     assert.equal(turning > 0, rule.turns, `${level} ${rule.turns ? 'has' : 'has no'} turning slides`);
   }
   assert.equal(slideMs(slideSteps(48, 'up', 'easy', seeded(1))[0].slide!), 4000);

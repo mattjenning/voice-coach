@@ -230,7 +230,7 @@ export default function PracticeScreen() {
             </View>
             <ThemedText type="small" themeColor="textSecondary">
               Easy slides move one note of the scale and last 4 seconds. Medium move up to three
-              and last 5. Hard move up to five, last 6, and on Random may turn round and come back.
+              and last 5. Hard move three to five, last 6, and on Random may turn round part way.
             </ThemedText>
           </Card>
         )}
