@@ -110,6 +110,8 @@ export const Type = {
   figure: { fontSize: 40, lineHeight: 48, fontWeight: '500' },
   /** A letter grade. */
   grade: { fontSize: 92, lineHeight: 110, fontWeight: '500' },
+  /** The name of a section, such as "Where to start". Clearly bigger than the text under it. */
+  section: { fontSize: 23, lineHeight: 30, fontWeight: '600' },
   /** The words on a button. */
   action: { fontSize: 19, lineHeight: 24, fontWeight: '600' },
 } as const;

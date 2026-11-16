@@ -173,11 +173,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
     gap: Spacing.three,
   },
-  label: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: 700,
-  },
+  label: Type.section,
   row: {
     flexDirection: 'row',
     alignItems: 'center',
