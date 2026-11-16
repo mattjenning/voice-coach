@@ -10,7 +10,7 @@ Everything in the app is built from one move. The app plays a note for three sec
 
 | Mode | What it does | State |
 | --- | --- | --- |
-| Quick practice | Two kinds of practice across one octave, from one of six starting notes named after the voice types. **Step mode:** eight notes up a major scale, one attempt each. **Slide mode:** seven glides from one note to another, climbing, descending or random; you follow each with your voice. A report card follows each set, with a percent score and a letter grade, and the full session report lists every finished set. Then the scale can stay, or move by one note or half an octave. | Step mode has run on a phone. Slide mode has not. Volume match is planned, not built. |
+| Quick practice | Two kinds of practice across one octave, from one of six starting notes named after the voice types. **Step mode:** eight notes up a major scale, one attempt each. **Slide mode:** seven four-second glides, climbing, descending or random. Random mixes straight slides with ones that go up and come back down. The app plays each glide first while a ring rides along its path; on your turn the ring sets off again when you start singing and a ball shows your voice. A report card follows each set, with a percent score and a letter grade, and the full session report lists every finished set. Then the scale can stay, or move by one note or half an octave. | Step mode has run on a phone. Slide mode has not. Volume match is planned, not built. |
 | Progression | Ten guided levels. Level 1 finds your home note, the note you sing when asked for an easy one. Every later level is built from it. Levels train pitch matching, steps, jumps, range and breath control. Progress and achievements are saved on the phone. | Built. Not yet run on a phone. |
 | Song mode | Master one song a phrase at a time, by call and response. | Design only. The screen explains the design. |
 
@@ -115,6 +115,21 @@ These need a real iPhone and have not been tried:
 3. How accurate the detector is on a real voice. A real set scored 92% on a phone, but nobody has checked a reading against a tuner.
 4. That progress is still there after the app is closed and opened again.
 5. `npx expo lint` has never run. The linter would not install in the build environment.
+
+## Before beta
+
+The app goes to beta testers when every line here is true. Today it is not.
+
+- [x] Step mode has run start to finish on a phone.
+- [ ] Slide mode has run start to finish on a phone.
+- [ ] Progression has run start to finish on a phone, and its progress survives closing the app.
+- [ ] Volume match is built, or hidden.
+- [ ] Song mode is hidden, or a tester is told plainly it is a plan.
+- [ ] A second person has tried it, ideally with a higher voice than Matthew's.
+- [ ] The app has its own icon. It still shows Expo's.
+- [ ] `npx expo lint` has run clean.
+- [ ] Matthew has joined the Apple Developer Program. TestFlight needs it.
+- [ ] A TestFlight build is installed on Matthew's own phone and works outside Expo Go.
 
 ## Roadmap
 

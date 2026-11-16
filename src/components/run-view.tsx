@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -81,21 +82,62 @@ function NoteField({ reading, flood }: { reading: TargetReading | null; flood: n
   );
 }
 
+/** Roughly how long after a step starts its sound begins. */
+const SOUND_LEAD_MS = 250;
+
+/** Milliseconds since `key` last changed, refreshed about twenty times a second while `running`. */
+function useElapsed(running: boolean, key: number): number {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const startedAt = Date.now();
+    const timer = setInterval(() => setElapsed(Date.now() - startedAt), 50);
+    return () => {
+      clearInterval(timer);
+      setElapsed(0);
+    };
+  }, [running, key]);
+  return running ? elapsed : 0;
+}
+
 /**
  * The pitch field for a slide: time runs left to right, pitch bottom to top.
- * The small dots are the path. The large ones are your voice.
+ * The small dots are the path.
+ *
+ * While the app plays the slide, a ring rides along the path so you can see
+ * what you are hearing. On your turn the ring sets off again when you start
+ * singing, showing where the tone would be, and a ball shows where your
+ * voice is. Keep the ball in the ring.
  */
 function SlideField({ run, fromMidi, slide }: { run: Run; fromMidi: number; slide: Slide }) {
   const theme = useTheme();
   const total = slideMs(slide);
-  const lowest = Math.min(fromMidi, slide.toMidi) - 1.5;
-  const highest = Math.max(fromMidi, slide.toMidi) + 1.5;
+  const turn = slide.viaMidi ?? fromMidi;
+  const lowest = Math.min(fromMidi, slide.toMidi, turn) - 1.5;
+  const highest = Math.max(fromMidi, slide.toMidi, turn) + 1.5;
   const up = (midi: number) => percent((midi - lowest) / (highest - lowest));
-  const path = Array.from({ length: 31 }, (_, i) => (i / 30) * total);
-  const sungTo = run.trace.length === 0 ? 0 : run.trace[run.trace.length - 1].tMs / total;
+  const path = Array.from({ length: 41 }, (_, i) => (i / 40) * total);
+
+  const playing = run.phase === 'tone';
+  const heardFor = useElapsed(playing, run.turn) - SOUND_LEAD_MS;
+  const sungFor =
+    run.slideStartedAt === null || run.clockMs === null ? null : run.clockMs - run.slideStartedAt;
+  // Where the tone is right now: while it plays, or on your turn once you have started.
+  const toneAt = playing ? (heardFor > 0 ? heardFor : null) : sungFor;
+  const ring = toneAt === null ? null : Math.min(toneAt, total);
+  const voice =
+    !playing && ring !== null && run.reading !== null
+      ? slideMidiAt(fromMidi, slide, ring) + run.reading.cents / 100
+      : null;
+
   return (
     <View style={[styles.field, { backgroundColor: theme.field }]}>
-      <View style={[styles.flood, { backgroundColor: theme.tune, width: percent(sungTo) }]} />
+      <View
+        style={[
+          styles.flood,
+          { backgroundColor: theme.tune, width: percent(playing || ring === null ? 0 : ring / total) },
+        ]}
+      />
       {path.map((tMs) => (
         <View
           key={tMs}
@@ -115,10 +157,9 @@ function SlideField({ run, fromMidi, slide }: { run: Run; fromMidi: number; slid
           <View
             key={point.tMs}
             style={[
-              styles.sungDot,
+              styles.trailDot,
               {
                 backgroundColor: off <= SLIDE_TOLERANCE_CENTS ? theme.onTune : theme.voice,
-                borderColor: theme.onTune,
                 left: percent(point.tMs / total),
                 bottom: up(point.midi),
               },
@@ -126,6 +167,31 @@ function SlideField({ run, fromMidi, slide }: { run: Run; fromMidi: number; slid
           />
         );
       })}
+      {ring !== null && (
+        <View
+          style={[
+            styles.ring,
+            {
+              borderColor: theme.onTune,
+              left: percent(ring / total),
+              bottom: up(slideMidiAt(fromMidi, slide, ring)),
+            },
+          ]}
+        />
+      )}
+      {voice !== null && ring !== null && run.reading !== null && (
+        <View
+          style={[
+            styles.ball,
+            {
+              backgroundColor: run.reading.inTune ? theme.onTune : theme.voice,
+              borderColor: theme.onTune,
+              left: percent(ring / total),
+              bottom: up(voice),
+            },
+          ]}
+        />
+      )}
     </View>
   );
 }
@@ -168,12 +234,12 @@ export function RunView({ run }: { run: Run }) {
   const holdShare = step.holdMs <= 0 ? 0 : Math.min(1, hold.heldMs / step.holdMs);
   const onLine = run.slideHeard === 0 ? 0 : Math.round((100 * run.slideOnLine) / run.slideHeard);
 
-  let detail = 'Listen.';
+  let detail = slide !== undefined ? 'Listen. Your turn comes next.' : 'Listen.';
   if (phase === 'listening') {
     if (reading === null) {
-      detail = anyNote ? 'Sing "ah" on any easy note.' : slide ? 'Sing the slide now.' : 'Sing it now.';
+      detail = anyNote ? 'Sing "ah" on any easy note.' : slide ? 'Your turn. Sing the slide.' : 'Sing it now.';
     } else {
-      detail = anyNote ? 'Keep it steady.' : howClose(reading);
+      detail = anyNote ? 'Keep it steady.' : slide ? 'Keep the ball in the ring.' : howClose(reading);
     }
   } else if (anyNote) {
     detail = 'Get ready.';
@@ -195,7 +261,12 @@ export function RunView({ run }: { run: Run }) {
             {anyNote ? 'Your note' : slide ? 'Follow the slide' : 'Match the note'}, {run.index + 1} of{' '}
             {run.steps.length}
           </ThemedText>
-          <ThemedText style={styles.target}>{stepLabel(step)}</ThemedText>
+          <ThemedText
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            style={slide !== undefined ? styles.slideTarget : styles.target}>
+            {stepLabel(step)}
+          </ThemedText>
         </View>
         <View style={styles.sungBlock}>
           <ThemedText type="small" themeColor="textSecondary">
@@ -249,6 +320,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   target: Type.note,
+  /** A slide's name is three times as long as a note's, so it is set smaller and kept on one line. */
+  slideTarget: Type.figure,
   sungBlock: {
     alignItems: 'flex-end',
   },
@@ -311,14 +384,31 @@ const styles = StyleSheet.create({
     marginBottom: -3,
     opacity: 0.45,
   },
-  sungDot: {
+  trailDot: {
     position: 'absolute',
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: -4,
+    marginBottom: -4,
+  },
+  ring: {
+    position: 'absolute',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 3,
+    marginLeft: -17,
+    marginBottom: -17,
+  },
+  ball: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 2,
-    marginLeft: -7,
-    marginBottom: -7,
+    marginLeft: -10,
+    marginBottom: -10,
   },
   under: {
     gap: Spacing.one,

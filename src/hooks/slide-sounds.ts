@@ -21,7 +21,7 @@ const players = new Map<string, AudioPlayer>();
  * instead, so the exercise still runs.
  */
 function slidePlayer(fromMidi: number, slide: Slide): AudioPlayer {
-  const key = `${fromMidi}-${slide.toMidi}-${slide.leadMs}-${slide.glideMs}-${slide.tailMs}`;
+  const key = `${fromMidi}-${slide.viaMidi ?? 'x'}-${slide.toMidi}-${slide.leadMs}-${slide.glideMs}-${slide.tailMs}`;
   const ready = players.get(key);
   if (ready !== undefined) return ready;
   let player: AudioPlayer;

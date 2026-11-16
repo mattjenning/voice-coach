@@ -3,8 +3,9 @@
  * and the singer follows the glide.
  *
  * A set is seven slides across one octave of a major scale. "Up" climbs the
- * scale one slide at a time, "down" comes back the same way, and "random"
- * jumps between any two notes of the scale.
+ * scale one slide at a time and "down" comes back the same way. "Random"
+ * mixes straight slides between any two notes of the scale with slides that
+ * go up and come back down to where they started.
  *
  * Pure logic. The sound is made here as numbers; saving and playing it is
  * done elsewhere.
@@ -14,6 +15,9 @@ import { midiToHz, noteName } from './notes.ts';
 import { MAJOR_SCALE } from './quick.ts';
 
 export type SlideOrder = 'up' | 'down' | 'random';
+
+/** In a random set, about this share of slides go up and come back down. */
+const ARCH_SHARE = 0.4;
 
 /**
  * The slides of one set.
@@ -26,7 +30,12 @@ export function slideSteps(start: number, order: SlideOrder, random: () => numbe
   for (let i = 0; i < scale.length - 1; i++) {
     if (order === 'up') steps.push(slideStep(scale[i], scale[i + 1]));
     else if (order === 'down') steps.push(slideStep(scale[scale.length - 1 - i], scale[scale.length - 2 - i]));
-    else {
+    else if (random() < ARCH_SHARE) {
+      // Up and back: start anywhere but the top, rise to a higher note, return.
+      const from = Math.floor(random() * (scale.length - 1));
+      const peak = from + 1 + Math.floor(random() * (scale.length - 1 - from));
+      steps.push(slideStep(scale[from], scale[from], scale[peak]));
+    } else {
       const from = Math.floor(random() * scale.length);
       // Pick a different note for the far end.
       const to = (from + 1 + Math.floor(random() * (scale.length - 1))) % scale.length;
@@ -36,11 +45,12 @@ export function slideSteps(start: number, order: SlideOrder, random: () => numbe
   return steps;
 }
 
-/** "C3 → D3" for a slide, "C3" for a plain note, "Any note" for a free one. */
+/** "C3 → D3" for a slide, "C3 → E3 → C3" for one that turns, "C3" for a note, "Any note" for a free one. */
 export function stepLabel(step: Step): string {
   if (step.midi === null) return 'Any note';
   if (step.slide === undefined) return noteName(step.midi);
-  return `${noteName(step.midi)} → ${noteName(step.slide.toMidi)}`;
+  const turn = step.slide.viaMidi === undefined ? '' : `${noteName(step.slide.viaMidi)} → `;
+  return `${noteName(step.midi)} → ${turn}${noteName(step.slide.toMidi)}`;
 }
 
 const OVERTONES = [1, 0.71, 0.58, 0.5, 0.45, 0.41, 0.38, 0.35];

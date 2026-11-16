@@ -47,7 +47,7 @@ export type PitchListener = {
 };
 
 /** If a sound never reports that it ended, stop waiting after this long. */
-const LONGEST_SOUND_MS = 5000;
+const LONGEST_SOUND_MS = 7000;
 
 /**
  * Puts the phone's sound system back in normal playing mode: sound comes out
@@ -82,6 +82,7 @@ function playToEnd(player: AudioPlayer, done: () => void): () => void {
     if (finished) return;
     finished = true;
     clearTimeout(timer);
+    clearInterval(ask);
     subscription.remove();
     done();
   };
@@ -104,6 +105,12 @@ function playToEnd(player: AudioPlayer, done: () => void): () => void {
     else if (startedAt > 0 && status.didJustFinish && Date.now() - startedAt > 300) finish();
   });
   const timer = setTimeout(finish, LONGEST_SOUND_MS);
+  // A sound made a moment ago may still be loading, and its "loaded" message
+  // can be missed. So ask it directly, a few times a second, until it is.
+  const ask = setInterval(() => {
+    if (started || finished) clearInterval(ask);
+    else if (player.isLoaded) begin();
+  }, 50);
   if (player.isLoaded) begin();
 
   return finish;

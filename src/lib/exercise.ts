@@ -43,16 +43,22 @@ export type Step = {
   slide?: Slide;
 };
 
-/** A slide holds its first note, glides to its last, and holds that. */
+/**
+ * A slide holds its first note, glides to its last, and holds that. With a
+ * turning note set, it glides there first and then on to the last note, so
+ * it can go up and come back down.
+ */
 export type Slide = {
   toMidi: number;
+  /** Where the slide turns, half way through the glide. Unset for a straight slide. */
+  viaMidi?: number;
   leadMs: number;
   glideMs: number;
   tailMs: number;
 };
 
-/** Half a second on the first note, two seconds gliding, half a second on the last. */
-export const SLIDE_SHAPE = { leadMs: 500, glideMs: 2000, tailMs: 500 };
+/** Half a second on the first note, three seconds gliding, half a second on the last. */
+export const SLIDE_SHAPE = { leadMs: 500, glideMs: 3000, tailMs: 500 };
 /** A slide is harder to track than a held note, so "on the line" is twice as wide. */
 export const SLIDE_TOLERANCE_CENTS = 50;
 /** On the line for this share of the slide counts as matched. */
@@ -64,9 +70,10 @@ export function slideMs(slide: Slide): number {
   return slide.leadMs + slide.glideMs + slide.tailMs;
 }
 
-/** A slide from one note to another, in the usual shape. */
-export function slideStep(fromMidi: number, toMidi: number): Step {
-  const slide = { toMidi, ...SLIDE_SHAPE };
+/** A slide from one note to another, in the usual shape. Give `viaMidi` to make it turn. */
+export function slideStep(fromMidi: number, toMidi: number, viaMidi?: number): Step {
+  const slide: Slide = { toMidi, ...SLIDE_SHAPE };
+  if (viaMidi !== undefined) slide.viaMidi = viaMidi;
   return { midi: fromMidi, holdMs: 0, listenMs: slideMs(slide) + SLIDE_WAIT_MS, slide };
 }
 
@@ -76,7 +83,11 @@ export function slideStep(fromMidi: number, toMidi: number): Step {
  */
 export function slideMidiAt(fromMidi: number, slide: Slide, tMs: number): number {
   const along = Math.max(0, Math.min(1, (tMs - slide.leadMs) / slide.glideMs));
-  return fromMidi + (slide.toMidi - fromMidi) * along;
+  if (slide.viaMidi === undefined) return fromMidi + (slide.toMidi - fromMidi) * along;
+  // A turning slide spends half the glide reaching the turn and half leaving it.
+  return along <= 0.5
+    ? fromMidi + (slide.viaMidi - fromMidi) * along * 2
+    : slide.viaMidi + (slide.toMidi - slide.viaMidi) * (along - 0.5) * 2;
 }
 
 /** The usual step: hold for 2 seconds, inside 3.5 seconds of listening. */

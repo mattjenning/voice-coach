@@ -24,7 +24,7 @@ const MODES: { mode: Mode; title: string; line: string }[] = [
   {
     mode: 'slide',
     title: 'Slide mode',
-    line: 'Seven slides from one note to another. Hear the glide, then follow it with your voice.',
+    line: 'Seven slides from one note to another. The app plays each glide first, then you follow it.',
   },
 ];
 
@@ -169,8 +169,8 @@ export default function PracticeScreen() {
               ))}
             </View>
             <ThemedText type="small" themeColor="textSecondary">
-              Step up climbs the scale a slide at a time. Step down comes back. Random jumps
-              between any two notes of the scale.
+              Step up climbs the scale a slide at a time. Step down comes back. Random mixes
+              jumps between any two notes with slides that go up and come back down.
             </ThemedText>
           </Card>
         )}
