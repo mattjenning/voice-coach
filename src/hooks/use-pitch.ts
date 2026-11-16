@@ -3,6 +3,7 @@ import {
   setAudioModeAsync,
   useAudioStream,
   type AudioPlayer,
+  type AudioStream,
   type AudioStreamBuffer,
 } from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -109,6 +110,21 @@ function playToEnd(player: AudioPlayer, done: () => void): () => void {
 }
 
 /**
+ * Turn the microphone stream off if it is on.
+ *
+ * When a screen closes, the phone throws the stream away, sometimes before
+ * the last of this code has finished. Touching a thrown-away stream is an
+ * error, and there is nothing left to stop, so that error is ignored.
+ */
+function stopStream(stream: AudioStream | null): void {
+  try {
+    if (stream?.isStreaming) stream.stop();
+  } catch {
+    // Already released with its screen.
+  }
+}
+
+/**
  * Listens to the microphone and reports the pitch being sung.
  *
  * `onPitch` is called about ten times a second while listening, with the
@@ -146,11 +162,15 @@ export function usePitch(onPitch: (hz: number | null, atMs: number) => void): Pi
   const stop = useCallback(() => {
     run.current++;
     if (sound.current !== null) {
-      sound.current.player.pause();
+      try {
+        sound.current.player.pause();
+      } catch {
+        // The sound has already gone.
+      }
       sound.current.giveUp();
       sound.current = null;
     }
-    if (stream?.isStreaming) stream.stop();
+    stopStream(stream);
     setStatus((current) => (current === 'on' ? 'off' : current));
   }, [stream]);
 
@@ -201,10 +221,11 @@ export function usePitch(onPitch: (hz: number | null, atMs: number) => void): Pi
         // Starting the stream puts the phone in record-only mode.
         await stream.start();
       } catch (error) {
-        return fail(error);
+        // If the round was stopped meanwhile, the stream may be gone. That is not a failure.
+        return mine === run.current ? fail(error) : 'cancelled';
       }
       if (mine !== run.current) {
-        if (stream.isStreaming) stream.stop();
+        stopStream(stream);
         return 'cancelled';
       }
       setStatus('on');
@@ -217,7 +238,8 @@ export function usePitch(onPitch: (hz: number | null, atMs: number) => void): Pi
   // background is the kind of surprise nobody wants.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') stop();
+      // 'inactive' is only a banner or the control panel passing over the app.
+      if (state === 'background') stop();
     });
     return () => subscription.remove();
   }, [stop]);

@@ -53,10 +53,12 @@ export function ExercisePlayer({
   useEffect(() => {
     if (phase !== 'tone' || midi === undefined) return;
     let current = true;
-    playThenListen(midi === null ? null : tonePlayer(midi)).then((outcome) => {
-      if (!current) return;
-      dispatch(outcome === 'listening' ? { type: 'listen', atMs: Date.now() } : { type: 'stop' });
-    });
+    playThenListen(midi === null ? null : tonePlayer(midi))
+      .catch(() => 'failed' as const)
+      .then((outcome) => {
+        if (!current) return;
+        dispatch(outcome === 'listening' ? { type: 'listen', atMs: Date.now() } : { type: 'stop' });
+      });
     return () => {
       current = false;
     };
@@ -85,7 +87,7 @@ export function ExercisePlayer({
   // Leaving the app ends the exercise. Coming back to a half-played set is confusing.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') onQuit();
+      if (state === 'background') onQuit();
     });
     return () => subscription.remove();
   }, [onQuit]);
