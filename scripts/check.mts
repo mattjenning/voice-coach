@@ -50,7 +50,7 @@ import {
   type Progress,
 } from '../src/lib/progression.ts';
 import { MAJOR_SCALE, SHIFTS, STARTS, canShift, canStartOn, scaleSteps } from '../src/lib/quick.ts';
-import { grade, rangeSize, summarize } from '../src/lib/report.ts';
+import { grade, noteScore, rangeSize, summarize } from '../src/lib/report.ts';
 import { readWav, writeWav } from '../src/lib/wav.ts';
 
 /** A repeatable stand-in for Math.random, so a failing check fails every time. */
@@ -322,6 +322,9 @@ assert.equal(currentStep(NO_RUN), null);
   assert.equal(rangeSize(card), 9);
   assert.equal(card.longestHoldMs, 2000);
   assert.ok(card.averageOffCents !== null && card.averageOffCents < 5);
+  // Matched, missed-but-close (0 cents off, held 700 of 2000 ms), matched.
+  assert.deepEqual(run.results.map(noteScore), [100, 68, 100]);
+  assert.equal(card.score, 89);
   assert.equal(grade(card), 'B');
 
   // A second set starts a fresh run, and the session report joins both.
@@ -349,6 +352,8 @@ assert.equal(currentStep(NO_RUN), null);
   assert.equal(runReducer(stopped, { type: 'listen', atMs: 5 }), stopped, 'a late tone does not restart it');
   assert.equal(summarize([]).averageOffCents, null);
   assert.equal(grade(summarize([])), null);
+  assert.equal(summarize([]).score, null);
+  assert.equal(noteScore(run.results[0]), 0, 'a note never heard scores nothing');
 }
 
 {
@@ -389,7 +394,32 @@ assert.deepEqual(
   scaleSteps(STARTS.medium).map((step) => noteName(step.midi ?? 0)),
   ['E3', 'F♯3', 'G♯3', 'A3', 'B3', 'C♯4', 'D♯4', 'E4'],
 );
-assert.deepEqual(SHIFTS.map((shift) => shift.by), [-12, -6, 0, 6, 12]);
+assert.deepEqual(SHIFTS.map((shift) => shift.by), [-6, -1, 0, 1, 6]);
+
+{
+  // Partial credit for a missed note: half for closeness, half for the hold.
+  const step = noteStep(60);
+  const missed = (closestCents: number | null, heldMs: number): StepResult => ({
+    step,
+    matched: false,
+    closestCents,
+    sungMidi: 60,
+    heldMs,
+  });
+  assert.equal(noteScore({ ...missed(0, 2000), matched: true }), 100);
+  assert.equal(noteScore(missed(null, 0)), 0);
+  assert.equal(noteScore(missed(100, 0)), 0, 'a semitone off earns nothing');
+  assert.equal(noteScore(missed(-250, 0)), 0);
+  assert.equal(noteScore(missed(50, 0)), 25, 'half a semitone off, never in tune');
+  assert.equal(noteScore(missed(-40, 0)), 30, 'flat counts the same as sharp');
+  assert.equal(noteScore(missed(10, 1000)), 70, 'in tune for half the hold');
+  assert.equal(noteScore(missed(0, 1990)), 99, 'a miss never reaches full marks');
+  const letter = (scores: StepResult[]) => grade(summarize(scores));
+  assert.equal(letter([{ ...missed(0, 2000), matched: true }]), 'A');
+  assert.equal(letter([missed(10, 1000)]), 'C');
+  assert.equal(letter([missed(20, 400)]), 'F');
+  assert.equal(summarize([missed(10, 1000), { ...missed(0, 2000), matched: true }]).score, 85);
+}
 for (const start of Object.values(STARTS)) {
   assert.ok(canStartOn(start));
   assert.ok(canShift(start, 0));
@@ -397,8 +427,9 @@ for (const start of Object.values(STARTS)) {
 assert.ok(canStartOn(LOWEST_TONE) && canStartOn(HIGHEST_TONE - 12));
 assert.ok(!canStartOn(LOWEST_TONE - 1) && !canStartOn(HIGHEST_TONE - 11));
 assert.ok(!canShift(STARTS.low, -12), 'no going below the lowest tone');
-assert.ok(canShift(STARTS.low, -6));
-assert.ok(canShift(STARTS.high, 12) && !canShift(STARTS.high + 12, 6));
+assert.ok(canShift(STARTS.low, -6) && !canShift(LOWEST_TONE, -1));
+assert.ok(canShift(STARTS.high, 6) && !canShift(HIGHEST_TONE - 12, 1));
+for (const shift of SHIFTS) assert.ok(shift.spoken.length > 0 && shift.label.split('\n').length <= 2);
 
 // --- Progression -----------------------------------------------------------
 

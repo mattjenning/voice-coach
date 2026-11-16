@@ -10,7 +10,7 @@ Everything in the app is built from one move. The app plays a note for three sec
 
 | Mode | What it does | State |
 | --- | --- | --- |
-| Quick practice | One octave of a major scale, starting low, medium or high. Each note gets one attempt, then the next plays by itself. A report card follows, for the set and for the whole session, and the scale can move down or up by a half or a whole octave. | Built. Not yet run on a phone. |
+| Quick practice | One octave of a major scale, starting low, medium or high. Each note gets one attempt, then the next plays by itself. A report card follows, for the set and for the whole session, with a percent score and a letter grade. Then the scale can stay, or move down or up by one note or half an octave. | Built. Not yet run on a phone. |
 | Progression | Ten guided levels. Level 1 finds your home note, the note you sing when asked for an easy one. Every later level is built from it. Levels train pitch matching, steps, jumps, range and breath control. Progress and achievements are saved on the phone. | Built. Not yet run on a phone. |
 | Song mode | Master one song a phrase at a time, by call and response. | Design only. The screen explains the design. |
 
@@ -84,6 +84,8 @@ The check for this sings a made-up six-note phrase, with vibrato, a repeated not
 - **The tone and the microphone never overlap.** On an iPhone, `expo-audio`'s microphone stream puts the phone in record-only mode, and nothing can play until the stream stops. Taking turns also keeps the app from scoring its own speaker. This is why Song mode is designed as call and response.
 - **The speaker is reset before every tone.** The microphone stream leaves the phone in a quiet "measurement" setting, and a sound that has played once sits at its end. Both made the second tone silent on a real iPhone.
 - **Reference tones are rich in overtones.** A phone speaker is silent below about 300 Hz, so a plain low note would not be heard.
+- **Missed notes earn partial credit.** A matched note scores 100. A missed one gets up to 50 for how close the best attempt came (full marks on the note, nothing a semitone away) and up to 50 for how much of the hold was done in tune. The set's score is the average, graded on the school scale: A from 90, B from 80, C from 70, D from 60.
+- **"One note" is one semitone**, the next piano key. That is how singers walk a warm-up scale up and down.
 - **Round timings came from trying it** (Matthew, 2026-11-16): a 3 second tone, 3.5 seconds of listening, 2 seconds held.
 
 ## Not yet proven

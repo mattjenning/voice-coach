@@ -1,7 +1,7 @@
 /**
  * Quick practice: one octave of a major scale, going up, starting low,
- * medium or high. After each set the start can move up or down by a half or
- * a whole octave.
+ * medium or high. After each set the start can move up or down by one note
+ * or by half an octave.
  *
  * Pure logic.
  */
@@ -27,15 +27,26 @@ export function scaleSteps(start: number): Step[] {
   return MAJOR_SCALE.map((above) => noteStep(start + above));
 }
 
-export type Shift = { label: string; by: number };
+export type Shift = {
+  /** Two short lines for a button: an amount over a unit. */
+  label: string;
+  /** The same thing in full, for a screen reader. */
+  spoken: string;
+  /** Semitones to move the start of the scale. */
+  by: number;
+};
 
-/** The choices after a set. Half an octave is six semitones. */
+/**
+ * The choices after a set. Half an octave is six semitones. "One note" is
+ * one semitone, the next piano key, which is how singers walk a warm-up
+ * scale up and down.
+ */
 export const SHIFTS: Shift[] = [
-  { label: 'Down 1', by: -12 },
-  { label: 'Down ½', by: -6 },
-  { label: 'Stay', by: 0 },
-  { label: 'Up ½', by: 6 },
-  { label: 'Up 1', by: 12 },
+  { label: '−½\noctave', spoken: 'Down half an octave', by: -6 },
+  { label: '−1\nnote', spoken: 'Down one note', by: -1 },
+  { label: 'Stay', spoken: 'Stay on the same notes', by: 0 },
+  { label: '+1\nnote', spoken: 'Up one note', by: 1 },
+  { label: '+½\noctave', spoken: 'Up half an octave', by: 6 },
 ];
 
 /** A scale needs a tone for its top note, an octave above the start. */

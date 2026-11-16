@@ -61,7 +61,7 @@ export default function QuickPracticeScreen() {
           <Label>Go again</Label>
           <ShiftButtons start={start} onChoose={sing} />
           <ThemedText type="small" themeColor="textSecondary">
-            Moves the whole scale by octaves. That set was {span(start)}.
+            Moves the whole scale. One note is the next piano key. That set was {span(start)}.
           </ThemedText>
         </Card>
       </Screen>

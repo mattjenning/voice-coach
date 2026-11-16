@@ -7,7 +7,7 @@ import { useTheme } from '@/hooks/use-theme';
 import type { StepResult } from '@/lib/exercise';
 import { HOLD } from '@/lib/hold';
 import { formatCents, noteName } from '@/lib/notes';
-import { grade, rangeSize, summarize } from '@/lib/report';
+import { grade, noteScore, rangeSize, summarize } from '@/lib/report';
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -20,7 +20,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** One line per note: its name, whether it was matched, and the best attempt. */
+/** One line per note: its name, whether it was matched, the best attempt, and its score. */
 function NoteRows({ results }: { results: StepResult[] }) {
   const theme = useTheme();
   return (
@@ -45,6 +45,9 @@ function NoteRows({ results }: { results: StepResult[] }) {
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={styles.rowAttempt}>
               {result.matched ? '' : attempt}
+            </ThemedText>
+            <ThemedText type="smallBold" style={styles.rowScore}>
+              {noteScore(result)}%
             </ThemedText>
           </View>
         );
@@ -74,11 +77,16 @@ export function ReportCard({
     <Card>
       <Label>{title}</Label>
       <View style={styles.top}>
-        <ThemedText
-          type="title"
-          style={[styles.grade, { color: letter === 'A' || letter === 'B' ? theme.good : theme.off }]}>
-          {letter ?? '–'}
-        </ThemedText>
+        <View style={styles.gradeBlock}>
+          <ThemedText
+            type="title"
+            style={[styles.grade, { color: letter === 'A' || letter === 'B' ? theme.good : theme.off }]}>
+            {letter ?? '–'}
+          </ThemedText>
+          <ThemedText type="smallBold" style={styles.numbers}>
+            {summary.score === null ? '' : `${summary.score}%`}
+          </ThemedText>
+        </View>
         <View style={styles.facts}>
           <Fact label="Notes matched" value={`${summary.matched} of ${summary.attempted}`} />
           <Fact
@@ -111,10 +119,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.three,
   },
+  gradeBlock: {
+    minWidth: 64,
+    alignItems: 'center',
+  },
   grade: {
     fontSize: 72,
-    lineHeight: 80,
-    minWidth: 64,
+    lineHeight: 76,
     textAlign: 'center',
   },
   facts: {
@@ -147,5 +158,10 @@ const styles = StyleSheet.create({
   },
   rowAttempt: {
     flex: 1,
+  },
+  rowScore: {
+    width: 44,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
 });
