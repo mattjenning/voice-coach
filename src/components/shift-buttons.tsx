@@ -30,7 +30,7 @@ export function ShiftButtons({ start, onChoose }: { start: number; onChoose: (st
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    gap: Spacing.one,
+    gap: Spacing.two,
   },
   cell: {
     flex: 1,

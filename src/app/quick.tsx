@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { ExercisePlayer } from '@/components/exercise-player';
 import { ReportCard } from '@/components/report-card';
 import { ShiftButtons } from '@/components/shift-buttons';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Button, Card, Label, Screen } from '@/components/ui';
+import { Button, Card, Label, ListRow, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import type { Step, StepResult } from '@/lib/exercise';
 import { noteName } from '@/lib/notes';
@@ -48,9 +47,9 @@ const span = (start: number) => `${noteName(start)} to ${noteName(start + 12)}`;
 
 /** What one set is called on a report card. */
 function setTitle(mode: Mode, start: number, order: SlideOrder): string {
-  if (mode === 'step') return `Steps · ${span(start)}`;
+  if (mode === 'step') return `Steps, ${span(start)}`;
   const label = ORDERS.find((each) => each.order === order)?.label.toLowerCase() ?? order;
-  return `Slides, ${label} · ${span(start)}`;
+  return `Slides, ${label}, ${span(start)}`;
 }
 
 /** One finished set: what it was and how every note or slide went. */
@@ -114,7 +113,7 @@ export default function PracticeScreen() {
           <ReportCard
             key={sets.length - i}
             notes
-            title={`Set ${sets.length - i} · ${set.title}`}
+            title={`Set ${sets.length - i}: ${set.title}`}
             results={set.results}
           />
         ))}
@@ -129,7 +128,7 @@ export default function PracticeScreen() {
     return (
       <Screen back title="Report card" subtitle={`Sets finished this session: ${sets.length}`}>
         {showLatest && latest !== undefined && (
-          <ReportCard notes title={`This set · ${latest.title}`} results={latest.results} />
+          <ReportCard notes title={`This set: ${latest.title}`} results={latest.results} />
         )}
         <ReportCard title="This session" results={everything} />
         <Button
@@ -177,13 +176,16 @@ export default function PracticeScreen() {
         )}
         <Card>
           <Label>Where to start</Label>
-          {CHOICES.map(({ choice, label }) => (
-            <Button
-              key={choice}
-              label={`${label} · ${span(STARTS[choice])}`}
-              onPress={() => sing(mode, STARTS[choice], order)}
-            />
-          ))}
+          <View>
+            {CHOICES.map(({ choice, label }) => (
+              <ListRow
+                key={choice}
+                title={label}
+                value={span(STARTS[choice])}
+                onPress={() => sing(mode, STARTS[choice], order)}
+              />
+            ))}
+          </View>
           <ThemedText type="small" themeColor="textSecondary">
             Named after the six voice types, lowest to highest. Pick the one that feels easy, not
             the one you think you are. You can move up or down after each set.
@@ -196,26 +198,22 @@ export default function PracticeScreen() {
 
   return (
     <Screen back title="Quick practice" subtitle="Pick a kind of practice.">
-      {MODES.map((each) => (
-        <Pressable
-          key={each.mode}
-          accessibilityRole="button"
-          accessibilityLabel={each.title}
-          onPress={() => setView({ name: 'choose', mode: each.mode })}
-          style={({ pressed }) => pressed && styles.pressed}>
-          <ThemedView type="backgroundElement" style={styles.mode}>
-            <ThemedText style={styles.title}>{each.title}</ThemedText>
-            <ThemedText themeColor="textSecondary">{each.line}</ThemedText>
-          </ThemedView>
-        </Pressable>
-      ))}
-      <ThemedView type="backgroundElement" style={[styles.mode, styles.notYet]}>
-        <Label>Not built yet</Label>
-        <ThemedText style={styles.title}>Volume match</ThemedText>
-        <ThemedText themeColor="textSecondary">
-          Sing your best note and match a loudness target, soft to loud.
-        </ThemedText>
-      </ThemedView>
+      <View>
+        {MODES.map((each) => (
+          <ListRow
+            key={each.mode}
+            title={each.title}
+            detail={each.line}
+            onPress={() => setView({ name: 'choose', mode: each.mode })}
+          />
+        ))}
+        <ListRow
+          disabled
+          title="Volume match"
+          detail="Sing your best note and match a loudness target, soft to loud."
+          note="Not built yet."
+        />
+      </View>
       {sets.length > 0 && (
         <Button
           label={`Session report card (${setCount})`}
@@ -227,25 +225,9 @@ export default function PracticeScreen() {
 }
 
 const styles = StyleSheet.create({
-  mode: {
-    borderRadius: Spacing.three,
-    padding: Spacing.four,
-    gap: Spacing.one,
-  },
-  notYet: {
-    opacity: 0.6,
-  },
-  title: {
-    fontSize: 24,
-    lineHeight: 32,
-    fontWeight: 600,
-  },
-  pressed: {
-    opacity: 0.6,
-  },
   row: {
     flexDirection: 'row',
-    gap: Spacing.one,
+    gap: Spacing.two,
   },
   cell: {
     flex: 1,

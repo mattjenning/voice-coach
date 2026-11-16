@@ -49,8 +49,8 @@ function LevelRow({
   return (
     <View style={[styles.level, !open && styles.locked]}>
       <View style={styles.levelText}>
-        <ThemedText type="smallBold" style={{ color: passed ? theme.good : theme.textSecondary }}>
-          {passed ? `Level ${number} · passed` : open ? `Level ${number}` : `Level ${number} · locked`}
+        <ThemedText type="smallBold" themeColor={passed ? 'text' : 'textSecondary'}>
+          {passed ? `Level ${number}, passed` : open ? `Level ${number}` : `Level ${number}, locked`}
         </ThemedText>
         <ThemedText style={styles.levelTitle}>{level.title}</ThemedText>
         {open && (
@@ -153,13 +153,18 @@ export default function ProgressionScreen() {
             <Label>Achievements</Label>
             {earned.map((each) => (
               <View key={each.title} style={styles.achievement}>
-                <ThemedText
-                  type="smallBold"
-                  style={{ color: each.earned ? theme.good : theme.textSecondary }}>
-                  {each.earned ? 'Earned' : 'To earn'}
-                </ThemedText>
+                <View
+                  style={[
+                    styles.medal,
+                    {
+                      borderColor: theme.text,
+                      backgroundColor: each.earned ? theme.tune : 'transparent',
+                    },
+                    !each.earned && styles.locked,
+                  ]}
+                />
                 <View style={styles.levelText}>
-                  <ThemedText>{each.title}</ThemedText>
+                  <ThemedText style={styles.levelTitle}>{each.title}</ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
                     {each.detail}
                   </ThemedText>
@@ -215,7 +220,15 @@ const styles = StyleSheet.create({
     gap: Spacing.half,
   },
   levelTitle: {
-    fontWeight: 600,
+    fontSize: 19,
+    lineHeight: 24,
+    fontWeight: 700,
+  },
+  medal: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
   },
   achievement: {
     flexDirection: 'row',

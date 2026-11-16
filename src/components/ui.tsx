@@ -5,8 +5,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { DisplayFont, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+
+/**
+ * The shared pieces of every screen.
+ *
+ * The layout borrows from a printed gig poster and a set list: big
+ * condensed titles, everything flush left, and ink rules between sections.
+ * There are no boxes. A thing you can press is either a solid block of ink
+ * or a row in a list.
+ */
 
 export function Button({
   label,
@@ -19,8 +28,9 @@ export function Button({
   label: string;
   onPress: () => void;
   disabled?: boolean;
+  /** A solid block of ink: the one thing to do next. Others are outlined. */
   primary?: boolean;
-  /** Less padding at the sides, for a row of several buttons. */
+  /** Smaller type and less padding, for a row of several buttons. */
   compact?: boolean;
   accessibilityLabel?: string;
 }) {
@@ -28,42 +38,86 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityLabel={accessibilityLabel ?? label.replace('\n', ' ')}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        { backgroundColor: primary ? theme.text : theme.backgroundSelected },
+        { borderColor: theme.text, backgroundColor: primary ? theme.text : 'transparent' },
         compact && styles.compact,
-        (pressed || disabled) && styles.dimmed,
+        pressed && { backgroundColor: primary ? theme.textSecondary : theme.backgroundSelected },
+        disabled && styles.disabled,
       ]}>
-      <ThemedText style={[styles.buttonLabel, primary && { color: theme.background }]}>
+      <ThemedText
+        style={[
+          compact ? styles.compactLabel : styles.buttonLabel,
+          { color: primary ? theme.background : theme.text },
+        ]}>
         {label}
       </ThemedText>
     </Pressable>
   );
 }
 
-/** A rounded panel. */
+/** A section of a screen. Sections are set apart by an ink rule, not a box. */
 export function Card({ children }: { children: ReactNode }) {
-  return (
-    <ThemedView type="backgroundElement" style={styles.card}>
-      {children}
-    </ThemedView>
-  );
+  const theme = useTheme();
+  return <View style={[styles.section, { borderTopColor: theme.text }]}>{children}</View>;
 }
 
-/** A small capital-letter heading for a card. */
+/** The name of a section. */
 export function Label({ children }: { children: ReactNode }) {
+  return <ThemedText style={styles.label}>{children}</ThemedText>;
+}
+
+/**
+ * A row in a list you can press: a big name, with a line of detail under it
+ * or a short value at the right. Rows share thin rules, like a set list.
+ */
+export function ListRow({
+  title,
+  detail,
+  value,
+  note,
+  onPress,
+  disabled = false,
+}: {
+  title: string;
+  detail?: string;
+  /** Short text at the right edge, such as a range of notes. */
+  value?: string;
+  /** A plain remark under the detail, such as "Not built yet." */
+  note?: string;
+  onPress?: () => void;
+  disabled?: boolean;
+}) {
+  const theme = useTheme();
+  const inert = disabled || onPress === undefined;
   return (
-    <ThemedText type="small" themeColor="textSecondary" style={styles.label}>
-      {children}
-    </ThemedText>
+    <Pressable
+      accessibilityRole={inert ? undefined : 'button'}
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: inert }}
+      disabled={inert}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        { borderBottomColor: theme.textSecondary },
+        pressed && { backgroundColor: theme.backgroundSelected },
+        inert && styles.disabled,
+      ]}>
+      <View style={styles.rowText}>
+        <ThemedText type="subtitle">{title}</ThemedText>
+        {detail !== undefined && <ThemedText themeColor="textSecondary">{detail}</ThemedText>}
+        {note !== undefined && <ThemedText type="smallBold">{note}</ThemedText>}
+      </View>
+      {value !== undefined && <ThemedText style={styles.rowValue}>{value}</ThemedText>}
+    </Pressable>
   );
 }
 
-/** The frame every screen shares: a title, an optional way back, and scrolling content. */
+/** The frame every screen shares: a poster title over a heavy rule, then scrolling content. */
 export function Screen({
   title,
   subtitle,
@@ -75,6 +129,7 @@ export function Screen({
   back?: boolean;
   children: ReactNode;
 }) {
+  const theme = useTheme();
   return (
     <ThemedView style={styles.screen}>
       <SafeAreaView style={styles.safeArea}>
@@ -82,10 +137,11 @@ export function Screen({
           <View style={styles.header}>
             {back && (
               <Pressable accessibilityRole="button" hitSlop={12} onPress={() => router.back()}>
-                <ThemedText themeColor="textSecondary">‹ Modes</ThemedText>
+                <ThemedText type="smallBold">‹ Modes</ThemedText>
               </Pressable>
             )}
-            <ThemedText type="subtitle">{title}</ThemedText>
+            <ThemedText type="title">{title}</ThemedText>
+            <View style={[styles.headRule, { backgroundColor: theme.text }]} />
             {subtitle !== undefined && <ThemedText themeColor="textSecondary">{subtitle}</ThemedText>}
           </View>
           {children}
@@ -106,43 +162,70 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   content: {
-    paddingHorizontal: Spacing.three,
-    paddingBottom: Spacing.four,
-    gap: Spacing.three,
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.six,
+    gap: Spacing.four,
   },
   header: {
-    paddingTop: Spacing.three,
-    gap: Spacing.one,
+    paddingTop: Spacing.four,
+    gap: Spacing.two,
   },
-  card: {
-    borderRadius: Spacing.three,
-    padding: Spacing.three,
+  headRule: {
+    height: 6,
+    marginTop: Spacing.one,
+    marginBottom: Spacing.one,
+  },
+  section: {
+    borderTopWidth: 2,
+    paddingTop: Spacing.three,
     gap: Spacing.three,
   },
   label: {
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: 700,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    paddingVertical: Spacing.three,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  rowText: {
+    flex: 1,
+    gap: Spacing.one,
+  },
+  rowValue: {
+    fontVariant: ['tabular-nums'],
+    fontWeight: 600,
   },
   button: {
-    minHeight: 48,
-    minWidth: 48,
-    borderRadius: Spacing.three,
+    minHeight: 60,
+    borderWidth: 2,
+    borderRadius: 14,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  buttonLabel: {
+    fontFamily: DisplayFont,
+    fontSize: 24,
+    lineHeight: 28,
+    textAlign: 'center',
+  },
   compact: {
     minHeight: 64,
     paddingHorizontal: Spacing.one,
   },
-  buttonLabel: {
-    fontWeight: 600,
+  compactLabel: {
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: 700,
     textAlign: 'center',
   },
-  dimmed: {
-    opacity: 0.5,
+  disabled: {
+    opacity: 0.35,
   },
 });

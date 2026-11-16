@@ -74,6 +74,14 @@ The recording must be a WAV file of a voice on its own, with no instruments. The
 
 The check for this sings a made-up six-note phrase, with vibrato, a repeated note and two notes joined without a gap, and requires every note to come back in order with its edges within 70 milliseconds. It has not been tried on a real voice.
 
+## The look
+
+A two-ink gig poster. Deep indigo on pale periwinkle, set in a condensed poster typeface (Big Shoulders), flush left, with ink rules between sections and no boxes. Two spot colors each mean one thing: tangerine is where your voice is, yellow is in tune.
+
+The one loud element is the pitch field. Pitch runs up and down it. While you hold the note, yellow floods in from the left, and when it reaches the far side the note is matched. Everything else stays quiet.
+
+Nothing is black, white or grey. Dark mode swaps ink and paper and keeps the spot colors. The tokens are in `src/constants/theme.ts`.
+
 ## Decisions
 
 - **Expo and Expo Go.** Built on Windows, previewed on an iPhone, no Mac needed. `expo-audio` in SDK 58 can stream live microphone samples, which is what pitch detection needs.

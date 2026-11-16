@@ -7,26 +7,48 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+/**
+ * The look: a two-ink gig poster. Deep indigo ink on pale periwinkle paper,
+ * with two spot colors that each mean one thing.
+ *
+ *   voice  tangerine  where your voice is
+ *   tune   yellow     in tune; it floods the pitch field as you hold a note
+ *
+ * Nothing is black, white or grey. Dark mode swaps ink and paper and keeps
+ * the spot colors.
+ */
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-    /** In tune. */
-    good: '#1E8E4E',
-    /** Off the note. */
-    off: '#B5540A',
+    /** Ink: all text and rules. */
+    text: '#1C1660',
+    /** Paper: the ground of every screen. */
+    background: '#ECEEFB',
+    /** A quiet tint of ink on paper, for tracks and resting surfaces. */
+    backgroundElement: '#DBDFF7',
+    backgroundSelected: '#DBDFF7',
+    textSecondary: '#55518F',
+    /** The pitch field at rest. Pale in both modes, so its ink marks always show. */
+    field: '#DBDFF7',
+    /** In tune. A fill, never a text color: yellow on paper is too faint to read. */
+    tune: '#FFCB1F',
+    /** Text and marks that sit on the field or the yellow. Indigo in both modes. */
+    onTune: '#1C1660',
+    /** Where your voice is. A fill. */
+    voice: '#FF5A36',
+    /** Off the note, as text. Darker than `voice` so it reads on paper. */
+    off: '#C2381A',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-    good: '#3DD68C',
-    off: '#FFA057',
+    text: '#E9EBFF',
+    background: '#17114F',
+    backgroundElement: '#261E74',
+    backgroundSelected: '#261E74',
+    textSecondary: '#A9A8E0',
+    field: '#DBDFF7',
+    tune: '#FFCB1F',
+    onTune: '#1C1660',
+    voice: '#FF6E4E',
+    off: '#FF9A82',
   },
 } as const;
 
@@ -67,4 +89,7 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const MaxContentWidth = 800;
+/** The poster typeface, used for titles, note names and buttons. Loaded in the root layout. */
+export const DisplayFont = 'BigShoulders_800ExtraBold';
+
+export const MaxContentWidth = 560;

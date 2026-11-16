@@ -2,61 +2,68 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Card, Label } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { DisplayFont, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { StepResult } from '@/lib/exercise';
 import { HOLD } from '@/lib/hold';
 import { formatCents, noteName } from '@/lib/notes';
-import { stepLabel } from '@/lib/slide';
 import { grade, noteScore, rangeSize, summarize } from '@/lib/report';
+import { stepLabel } from '@/lib/slide';
 
+/** One fact: its name at the left, its value at the right, a thin rule under it. */
 function Fact({ label, value }: { label: string; value: string }) {
+  const theme = useTheme();
   return (
-    <View style={styles.fact}>
+    <View style={[styles.fact, { borderBottomColor: theme.textSecondary }]}>
       <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
         {label}
       </ThemedText>
-      <ThemedText style={styles.numbers}>{value}</ThemedText>
+      <ThemedText type="smallBold" style={styles.numbers}>
+        {value}
+      </ThemedText>
     </View>
   );
 }
 
-/** One line per note: its name, whether it was matched, the best attempt, and its score. */
+/** What went wrong on a missed note, in a few words. */
+function attempt(result: StepResult): string {
+  if (result.closestCents === null) return 'not heard';
+  if (result.step.slide !== undefined) return `${Math.round(result.closestCents)} cents off`;
+  if (Math.abs(result.closestCents) <= HOLD.toleranceCents) return 'in tune, not held';
+  return formatCents(result.closestCents, HOLD.toleranceCents);
+}
+
+/**
+ * One line per note. The square at the left is the same mark the note had
+ * while it was being sung: yellow for matched, tangerine for missed.
+ */
 function NoteRows({ results }: { results: StepResult[] }) {
   const theme = useTheme();
-  // Slides have longer names than notes, so their column is wider.
-  const wide = results.some((result) => result.step.slide !== undefined);
   return (
-    <View style={styles.rows}>
-      {results.map((result, i) => {
-        let attempt = 'not heard';
-        if (result.step.slide !== undefined) {
-          attempt = result.closestCents === null ? 'not heard' : `${Math.round(result.closestCents)} cents off`;
-        } else if (result.closestCents !== null) {
-          attempt = formatCents(result.closestCents, HOLD.toleranceCents);
-          if (!result.matched && Math.abs(result.closestCents) <= HOLD.toleranceCents) {
-            attempt = 'in tune, not held';
-          }
-        }
-        return (
-          <View key={i} style={styles.row}>
-            <ThemedText style={wide ? styles.rowSlide : styles.rowNote}>
-              {stepLabel(result.step)}
-            </ThemedText>
-            <ThemedText
-              type="smallBold"
-              style={[styles.rowMark, { color: result.matched ? theme.good : theme.off }]}>
-              {result.matched ? 'Matched' : 'Missed'}
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.rowAttempt}>
-              {result.matched || wide ? '' : attempt}
-            </ThemedText>
-            <ThemedText type="smallBold" style={styles.rowScore}>
-              {noteScore(result)}%
-            </ThemedText>
-          </View>
-        );
-      })}
+    <View>
+      {results.map((result, i) => (
+        <View key={i} style={[styles.row, { borderBottomColor: theme.textSecondary }]}>
+          <View
+            style={[
+              styles.square,
+              {
+                borderColor: theme.text,
+                backgroundColor: result.matched ? theme.tune : theme.voice,
+              },
+            ]}
+          />
+          <ThemedText style={styles.rowName}>{stepLabel(result.step)}</ThemedText>
+          <ThemedText
+            type="small"
+            numberOfLines={1}
+            style={[styles.rowAttempt, { color: result.matched ? theme.textSecondary : theme.off }]}>
+            {result.matched ? 'matched' : attempt(result)}
+          </ThemedText>
+          <ThemedText type="smallBold" style={styles.rowScore}>
+            {noteScore(result)}%
+          </ThemedText>
+        </View>
+      ))}
     </View>
   );
 }
@@ -78,41 +85,39 @@ export function ReportCard({
   const summary = summarize(results);
   const letter = grade(summary);
   const range = rangeSize(summary);
+  const passed = letter === 'A' || letter === 'B';
+  const miss = summary.averageOffCents === null ? null : Math.round(summary.averageOffCents);
   return (
     <Card>
       <Label>{title}</Label>
       <View style={styles.top}>
-        <View style={styles.gradeBlock}>
-          <ThemedText
-            type="title"
-            style={[styles.grade, { color: letter === 'A' || letter === 'B' ? theme.good : theme.off }]}>
+        {/* The grade sits on a block of yellow when it is an A or a B. */}
+        <View
+          style={[
+            styles.gradeBlock,
+            { backgroundColor: passed ? theme.tune : theme.backgroundElement },
+          ]}>
+          <ThemedText style={[styles.grade, { color: passed ? theme.onTune : theme.text }]}>
             {letter ?? '–'}
-          </ThemedText>
-          <ThemedText type="smallBold" style={styles.numbers}>
-            {summary.score === null ? '' : `${summary.score}%`}
           </ThemedText>
         </View>
         <View style={styles.facts}>
-          <Fact label="Notes matched" value={`${summary.matched} of ${summary.attempted}`} />
+          <ThemedText style={styles.score}>
+            {summary.score === null ? 'No notes yet' : `${summary.score}%`}
+          </ThemedText>
+          <Fact label="Matched" value={`${summary.matched} of ${summary.attempted}`} />
           <Fact
             label="Average miss"
-            value={
-              summary.averageOffCents === null
-                ? 'nothing heard'
-                : Math.round(summary.averageOffCents) === 1
-                  ? '1 cent'
-                  : `${Math.round(summary.averageOffCents)} cents`
-            }
+            value={miss === null ? 'nothing heard' : miss === 1 ? '1 cent' : `${miss} cents`}
           />
           <Fact
-            label="Range matched"
+            label="Range"
             value={
               summary.lowestSung === null || summary.highestSung === null
                 ? 'none yet'
-                : `${noteName(summary.lowestSung)} to ${noteName(summary.highestSung)}`
+                : `${noteName(summary.lowestSung)} to ${noteName(summary.highestSung)}, ${range} ${range === 1 ? 'note' : 'notes'}`
             }
           />
-          <Fact label="Range size" value={range === 1 ? '1 note' : `${range} notes`} />
         </View>
       </View>
       {notes && <NoteRows results={results} />}
@@ -123,54 +128,64 @@ export function ReportCard({
 const styles = StyleSheet.create({
   top: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     gap: Spacing.three,
   },
   gradeBlock: {
-    minWidth: 64,
+    width: 104,
+    borderRadius: 20,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   grade: {
-    fontSize: 72,
-    lineHeight: 76,
-    textAlign: 'center',
+    fontFamily: DisplayFont,
+    fontSize: 104,
+    lineHeight: 108,
   },
   facts: {
     flex: 1,
-    gap: Spacing.one,
+  },
+  score: {
+    fontFamily: DisplayFont,
+    fontSize: 44,
+    lineHeight: 46,
+    fontVariant: ['tabular-nums'],
   },
   fact: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'baseline',
     gap: Spacing.two,
+    paddingVertical: Spacing.one + Spacing.half,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   numbers: {
     fontVariant: ['tabular-nums'],
     textAlign: 'right',
     flexShrink: 1,
   },
-  rows: {
-    gap: Spacing.one,
-  },
   row: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: Spacing.two,
+    paddingVertical: Spacing.two,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  rowNote: {
-    width: 56,
+  square: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 2,
   },
-  rowSlide: {
-    width: 104,
-  },
-  rowMark: {
-    width: 72,
+  rowName: {
+    fontWeight: 700,
+    minWidth: 48,
   },
   rowAttempt: {
     flex: 1,
   },
   rowScore: {
-    width: 44,
+    width: 48,
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
