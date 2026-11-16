@@ -41,7 +41,17 @@ export type Step = {
    * singer follows it. `holdMs` is not used for a slide.
    */
   slide?: Slide;
+  /**
+   * Set for a phrase of a song: several notes sung one after another in
+   * time. `midi` is the first of them. `holdMs` is not used.
+   */
+  phrase?: PhraseNote[];
+  /** What to call this step on screen and in a report, when its notes alone do not say. */
+  name?: string;
 };
+
+/** One note of a phrase: which note, and how long it lasts. */
+export type PhraseNote = { midi: number; ms: number };
 
 /**
  * A slide holds its first note, glides to its last, and holds that. With a
@@ -70,9 +80,12 @@ export function slideMs(slide: Slide): number {
   return slide.leadMs + slide.glideMs + slide.tailMs;
 }
 
-/** A slide from one note to another, in the usual shape. Give `viaMidi` to make it turn. */
-export function slideStep(fromMidi: number, toMidi: number, viaMidi?: number): Step {
-  const slide: Slide = { toMidi, ...SLIDE_SHAPE };
+/**
+ * A slide from one note to another. Give `viaMidi` to make it turn, and
+ * `extraMs` to make the glide slower.
+ */
+export function slideStep(fromMidi: number, toMidi: number, viaMidi?: number, extraMs = 0): Step {
+  const slide: Slide = { toMidi, ...SLIDE_SHAPE, glideMs: SLIDE_SHAPE.glideMs + extraMs };
   if (viaMidi !== undefined) slide.viaMidi = viaMidi;
   return { midi: fromMidi, holdMs: 0, listenMs: slideMs(slide) + SLIDE_WAIT_MS, slide };
 }
@@ -93,6 +106,70 @@ export function slideMidiAt(fromMidi: number, slide: Slide, tMs: number): number
 /** The usual step: hold for 2 seconds, inside 3.5 seconds of listening. */
 export function noteStep(midi: number): Step {
   return { midi, holdMs: HOLD.goalMs, listenMs: 3500 };
+}
+
+/** A phrase of a song, as one step. */
+export function phraseStep(name: string, notes: PhraseNote[]): Step {
+  const total = notes.reduce((sum, note) => sum + note.ms, 0);
+  return { midi: notes[0].midi, holdMs: 0, listenMs: total + SLIDE_WAIT_MS, phrase: notes, name };
+}
+
+/**
+ * A moving target: a pitch that changes over time, which the singer follows.
+ * Slides and phrases are both paths, and are played, drawn and scored the
+ * same way.
+ */
+export type Path = {
+  totalMs: number;
+  /** Where the pitch is at a moment, as a fractional note number. */
+  midiAt: (tMs: number) => number;
+  lowest: number;
+  highest: number;
+  /** The moments a new note begins, for a path made of separate notes. Empty for a glide. */
+  starts: number[];
+};
+
+/** The path of a step, or null if it is a single held note. */
+export function stepPath(step: Step): Path | null {
+  if (step.midi === null) return null;
+  const from = step.midi;
+  if (step.slide !== undefined) {
+    const slide = step.slide;
+    const turn = slide.viaMidi ?? from;
+    return {
+      totalMs: slideMs(slide),
+      midiAt: (tMs) => slideMidiAt(from, slide, tMs),
+      lowest: Math.min(from, slide.toMidi, turn),
+      highest: Math.max(from, slide.toMidi, turn),
+      starts: [],
+    };
+  }
+  if (step.phrase !== undefined) {
+    const notes = step.phrase;
+    const starts: number[] = [];
+    let total = 0;
+    for (const note of notes) {
+      starts.push(total);
+      total += note.ms;
+    }
+    return {
+      totalMs: total,
+      midiAt: (tMs) => {
+        let at = notes.length - 1;
+        for (let i = 0; i < notes.length; i++) {
+          if (tMs < starts[i] + notes[i].ms) {
+            at = i;
+            break;
+          }
+        }
+        return notes[at].midi;
+      },
+      lowest: Math.min(...notes.map((note) => note.midi)),
+      highest: Math.max(...notes.map((note) => note.midi)),
+      starts,
+    };
+  }
+  return null;
 }
 
 export type StepResult = {
@@ -213,7 +290,8 @@ function advance(run: Run, result: StepResult): Run {
 /** Close the note in play. */
 function endStep(run: Run, matched: boolean): Run {
   const step = run.steps[run.index];
-  if (step.slide !== undefined) return endSlide(run, step, step.slide);
+  const path = stepPath(step);
+  if (path !== null) return endPath(run, step, path);
   const sungHz = run.closestHz;
   return advance(run, {
     step,
@@ -226,16 +304,15 @@ function endStep(run: Run, matched: boolean): Run {
 }
 
 /**
- * Close the slide in play. Its score is the share of readings on the line,
- * scaled down if the singer stopped before the slide was over.
+ * Close the slide or phrase in play. Its score is the share of readings on
+ * the line, scaled down if the singer stopped before the end.
  */
-function endSlide(run: Run, step: Step, slide: Slide): Run {
-  const total = slideMs(slide);
+function endPath(run: Run, step: Step, path: Path): Run {
   const lastMs = run.trace.length === 0 ? 0 : run.trace[run.trace.length - 1].tMs;
   const sungThrough =
     run.slideStartedAt === null || run.clockMs === null
       ? 0
-      : Math.min(1, Math.max(lastMs, run.clockMs - run.slideStartedAt) / total);
+      : Math.min(1, Math.max(lastMs, run.clockMs - run.slideStartedAt) / path.totalMs);
   const onLine = run.slideHeard === 0 ? 0 : run.slideOnLine / run.slideHeard;
   const score = Math.round(100 * onLine * sungThrough);
   return advance(run, {
@@ -250,16 +327,16 @@ function endSlide(run: Run, step: Step, slide: Slide): Run {
 }
 
 /**
- * Score one reading against a slide. The slide's clock starts when the
+ * Score one reading against a slide or phrase. Its clock starts when the
  * singer does, so a slow start is not counted against them.
  */
-function hearSlide(run: Run, fromMidi: number, slide: Slide, hz: number | null, atMs: number): Run {
+function hearPath(run: Run, path: Path, hz: number | null, atMs: number): Run {
   if (run.slideStartedAt === null && hz === null) return { ...run, hz, reading: null, clockMs: atMs };
   const startedAt = run.slideStartedAt ?? atMs;
   const tMs = atMs - startedAt;
-  if (tMs > slideMs(slide)) return { ...run, slideStartedAt: startedAt, clockMs: atMs };
+  if (tMs > path.totalMs) return { ...run, slideStartedAt: startedAt, clockMs: atMs };
 
-  const target = slideMidiAt(fromMidi, slide, tMs);
+  const target = path.midiAt(tMs);
   let reading: TargetReading | null = null;
   let { slideOnLine, slideErrorSum, slideVoiced, trace } = run;
   if (hz !== null) {
@@ -352,12 +429,12 @@ export function runReducer(run: Run, event: RunEvent): Run {
     case 'pitch': {
       if (run.phase !== 'listening' || run.deadlineMs === null) return run;
       const step = run.steps[run.index];
-      if (step.slide !== undefined && step.midi !== null) {
-        const heard = hearSlide(run, step.midi, step.slide, event.hz, event.atMs);
+      const path = stepPath(step);
+      if (path !== null) {
+        const heard = hearPath(run, path, event.hz, event.atMs);
         const over =
-          heard.slideStartedAt !== null &&
-          event.atMs - heard.slideStartedAt >= slideMs(step.slide);
-        return over || event.atMs >= run.deadlineMs ? endSlide(heard, step, step.slide) : heard;
+          heard.slideStartedAt !== null && event.atMs - heard.slideStartedAt >= path.totalMs;
+        return over || event.atMs >= run.deadlineMs ? endPath(heard, step, path) : heard;
       }
       const next =
         step.midi === null
@@ -370,11 +447,11 @@ export function runReducer(run: Run, event: RunEvent): Run {
 
     case 'tick': {
       if (run.phase !== 'listening' || run.deadlineMs === null) return run;
-      const slide = run.steps[run.index].slide;
+      const path = stepPath(run.steps[run.index]);
       const slideOver =
-        slide !== undefined &&
+        path !== null &&
         run.slideStartedAt !== null &&
-        event.atMs - run.slideStartedAt >= slideMs(slide);
+        event.atMs - run.slideStartedAt >= path.totalMs;
       if (slideOver) return endStep({ ...run, clockMs: event.atMs }, false);
       if (event.atMs >= run.deadlineMs) return endStep(run, false);
       return { ...run, clockMs: event.atMs };

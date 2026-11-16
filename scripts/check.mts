@@ -34,6 +34,7 @@ import {
   slideMidiAt,
   slideMs,
   slideStep,
+  stepPath,
   runReducer,
   timeLeftMs,
   type Run,
@@ -55,7 +56,7 @@ import {
 } from '../src/lib/progression.ts';
 import { MAJOR_SCALE, SHIFTS, STARTS, canShift, canStartOn, scaleSteps } from '../src/lib/quick.ts';
 import { grade, noteScore, rangeSize, summarize } from '../src/lib/report.ts';
-import { slideSound, slideSteps, stepLabel } from '../src/lib/slide.ts';
+import { DIFFICULTY, pathSound, slideSteps, stepLabel } from '../src/lib/slide.ts';
 import { readWav, writeWav } from '../src/lib/wav.ts';
 
 /** A repeatable stand-in for Math.random, so a failing check fails every time. */
@@ -461,13 +462,13 @@ assert.equal(currentStep(NO_RUN), null);
   assert.equal(ticking.index, 1, 'four seconds after the first sound, it moves on');
 
   // The sets: seven slides each.
-  const up = slideSteps(48, 'up', seeded(3));
+  const up = slideSteps(48, 'up', 'easy', seeded(3));
   assert.deepEqual(up.map(stepLabel), ['C3 → D3', 'D3 → E3', 'E3 → F3', 'F3 → G3', 'G3 → A3', 'A3 → B3', 'B3 → C4']);
-  const down = slideSteps(48, 'down', seeded(3));
+  const down = slideSteps(48, 'down', 'easy', seeded(3));
   assert.deepEqual(down.map(stepLabel), ['C4 → B3', 'B3 → A3', 'A3 → G3', 'G3 → F3', 'F3 → E3', 'E3 → D3', 'D3 → C3']);
   const scaleNotes = MAJOR_SCALE.map((above) => 48 + above);
   for (const seed of [1, 2, 3, 4, 5]) {
-    const any = slideSteps(48, 'random', seeded(seed));
+    const any = slideSteps(48, 'random', 'hard', seeded(seed));
     assert.equal(any.length, 7);
     for (const each of any) {
       assert.ok(scaleNotes.includes(each.midi ?? -1) && scaleNotes.includes(each.slide!.toMidi));
@@ -476,8 +477,8 @@ assert.equal(currentStep(NO_RUN), null);
     }
   }
   assert.notDeepEqual(
-    slideSteps(48, 'random', seeded(1)).map(stepLabel),
-    slideSteps(48, 'random', seeded(2)).map(stepLabel),
+    slideSteps(48, 'random', 'hard', seeded(1)).map(stepLabel),
+    slideSteps(48, 'random', 'hard', seeded(2)).map(stepLabel),
   );
 
   // A slide that turns: up from C4 to E4 and back.
@@ -489,7 +490,7 @@ assert.equal(currentStep(NO_RUN), null);
   assert.equal(slideMidiAt(60, archSlide, 2000), 64, 'the turn, half way through the glide');
   assert.equal(slideMidiAt(60, archSlide, 2750), 62, 'half way back down');
   assert.equal(slideMidiAt(60, archSlide, 4000), 60);
-  const archSound = trackPitch(slideSound(60, archSlide, 12_000), 12_000).points;
+  const archSound = trackPitch(pathSound(stepPath(arch)!, 12_000), 12_000).points;
   const top = archSound.find((point) => point.atMs >= 2000)?.hz ?? 0;
   assert.ok(Math.abs(centsBetween(top, midiToHz(64))) < 25, 'the sound peaks on E4');
   let archRun = runReducer(NO_RUN, { type: 'start', steps: [arch] });
@@ -507,27 +508,42 @@ assert.equal(currentStep(NO_RUN), null);
   const stayedScore = stayedUp.results[0].score ?? -1;
   assert.ok(stayedScore > 50 && stayedScore < 70, `staying at the top scored ${stayedScore}`);
 
-  // Random sets mix straight slides with ones that go up and come back.
-  let arches = 0;
-  let straights = 0;
-  for (let seed = 1; seed <= 40; seed++) {
-    for (const each of slideSteps(48, 'random', seeded(seed))) {
-      const turn = each.slide!.viaMidi;
-      if (turn === undefined) {
-        straights++;
-        continue;
+  // Difficulty: how far a slide may travel, how long it lasts, whether it may turn.
+  const scaleIndex = (midi: number) => scaleNotes.indexOf(midi);
+  for (const level of ['easy', 'medium', 'hard'] as const) {
+    const rule = DIFFICULTY[level];
+    let turning = 0;
+    let longest = 0;
+    for (const order of ['up', 'down', 'random'] as const) {
+      for (let seed = 1; seed <= 30; seed++) {
+        const set = slideSteps(48, order, level, seeded(seed));
+        assert.equal(set.length, 7);
+        for (const each of set) {
+          const far = each.slide!.viaMidi ?? each.slide!.toMidi;
+          const travelled = Math.abs(scaleIndex(far) - scaleIndex(each.midi ?? -1));
+          assert.ok(scaleIndex(far) >= 0 && scaleIndex(each.midi ?? -1) >= 0, 'stays on the scale');
+          assert.ok(travelled >= 1 && travelled <= rule.maxSteps, `${level} ${order}: ${stepLabel(each)}`);
+          assert.equal(each.slide!.glideMs, SLIDE_SHAPE.glideMs + rule.extraMs);
+          longest = Math.max(longest, travelled);
+          if (each.slide!.viaMidi !== undefined) {
+            turning++;
+            assert.equal(order, 'random', 'only random slides turn');
+            assert.equal(each.slide!.toMidi, each.midi, 'a turning slide comes back to where it started');
+          } else if (order !== 'random') {
+            assert.equal(far > (each.midi ?? 0), order === 'up', `${order} slides go ${order}`);
+          }
+        }
       }
-      arches++;
-      assert.ok(turn > (each.midi ?? 0), 'a turning slide goes up first');
-      assert.equal(each.slide!.toMidi, each.midi, 'and comes back to where it started');
-      assert.ok(scaleNotes.includes(turn));
     }
+    assert.equal(longest, rule.maxSteps, `${level} uses its whole reach`);
+    assert.equal(turning > 0, rule.turns, `${level} ${rule.turns ? 'has' : 'has no'} turning slides`);
   }
-  assert.ok(arches > 60 && straights > 100, `expected a mix, got ${arches} turning and ${straights} straight`);
-  assert.ok(slideSteps(48, 'up', seeded(1)).every((each) => each.slide!.viaMidi === undefined));
+  assert.equal(slideMs(slideSteps(48, 'up', 'easy', seeded(1))[0].slide!), 4000);
+  assert.equal(slideMs(slideSteps(48, 'up', 'medium', seeded(1))[0].slide!), 5000);
+  assert.equal(slideMs(slideSteps(48, 'up', 'hard', seeded(1))[0].slide!), 6000);
 
   // The sound of a slide really starts on one note and ends on the other.
-  const sound = slideSound(60, slide, 12_000);
+  const sound = pathSound(stepPath(step)!, 12_000);
   assert.equal(sound.length, 48_000);
   const heard = trackPitch(sound, 12_000).points.filter((point) => point.hz !== null);
   const first = heard[2].hz ?? 0;

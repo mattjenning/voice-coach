@@ -4,14 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import {
-  SLIDE_TOLERANCE_CENTS,
-  slideMidiAt,
-  slideMs,
-  timeLeftMs,
-  type Run,
-  type Slide,
-} from '@/lib/exercise';
+import { SLIDE_TOLERANCE_CENTS, stepPath, timeLeftMs, type Path, type Run } from '@/lib/exercise';
 import { HOLD, formatOctaves, type TargetReading } from '@/lib/hold';
 import { formatCents, nearestNote } from '@/lib/notes';
 import { stepLabel } from '@/lib/slide';
@@ -109,14 +102,13 @@ function useElapsed(running: boolean, key: number): number {
  * singing, showing where the tone would be, and a ball shows where your
  * voice is. Keep the ball in the ring.
  */
-function SlideField({ run, fromMidi, slide }: { run: Run; fromMidi: number; slide: Slide }) {
+function PathField({ run, path }: { run: Run; path: Path }) {
   const theme = useTheme();
-  const total = slideMs(slide);
-  const turn = slide.viaMidi ?? fromMidi;
-  const lowest = Math.min(fromMidi, slide.toMidi, turn) - 1.5;
-  const highest = Math.max(fromMidi, slide.toMidi, turn) + 1.5;
+  const total = path.totalMs;
+  const lowest = path.lowest - 1.5;
+  const highest = path.highest + 1.5;
   const up = (midi: number) => percent((midi - lowest) / (highest - lowest));
-  const path = Array.from({ length: 41 }, (_, i) => (i / 40) * total);
+  const dots = Array.from({ length: 49 }, (_, i) => (i / 48) * total);
 
   const playing = run.phase === 'tone';
   const heardFor = useElapsed(playing, run.turn) - SOUND_LEAD_MS;
@@ -127,7 +119,7 @@ function SlideField({ run, fromMidi, slide }: { run: Run; fromMidi: number; slid
   const ring = toneAt === null ? null : Math.min(toneAt, total);
   const voice =
     !playing && ring !== null && run.reading !== null
-      ? slideMidiAt(fromMidi, slide, ring) + run.reading.cents / 100
+      ? path.midiAt(ring) + run.reading.cents / 100
       : null;
 
   return (
@@ -138,7 +130,7 @@ function SlideField({ run, fromMidi, slide }: { run: Run; fromMidi: number; slid
           { backgroundColor: theme.tune, width: percent(playing || ring === null ? 0 : ring / total) },
         ]}
       />
-      {path.map((tMs) => (
+      {dots.map((tMs) => (
         <View
           key={tMs}
           style={[
@@ -146,13 +138,13 @@ function SlideField({ run, fromMidi, slide }: { run: Run; fromMidi: number; slid
             {
               backgroundColor: theme.onTune,
               left: percent(tMs / total),
-              bottom: up(slideMidiAt(fromMidi, slide, tMs)),
+              bottom: up(path.midiAt(tMs)),
             },
           ]}
         />
       ))}
       {run.trace.map((point) => {
-        const off = Math.abs(point.midi - slideMidiAt(fromMidi, slide, point.tMs)) * 100;
+        const off = Math.abs(point.midi - path.midiAt(point.tMs)) * 100;
         return (
           <View
             key={point.tMs}
@@ -174,7 +166,7 @@ function SlideField({ run, fromMidi, slide }: { run: Run; fromMidi: number; slid
             {
               borderColor: theme.onTune,
               left: percent(ring / total),
-              bottom: up(slideMidiAt(fromMidi, slide, ring)),
+              bottom: up(path.midiAt(ring)),
             },
           ]}
         />
@@ -230,14 +222,16 @@ export function RunView({ run }: { run: Run }) {
   const { reading, hold, hz, phase } = run;
   const sung = hz === null ? null : nearestNote(hz);
   const anyNote = step.midi === null;
-  const slide = step.slide;
+  const path = stepPath(step);
+  const slide = path !== null;
+  const phrase = step.phrase !== undefined;
   const holdShare = step.holdMs <= 0 ? 0 : Math.min(1, hold.heldMs / step.holdMs);
   const onLine = run.slideHeard === 0 ? 0 : Math.round((100 * run.slideOnLine) / run.slideHeard);
 
-  let detail = slide !== undefined ? 'Listen. Your turn comes next.' : 'Listen.';
+  let detail = slide ? 'Listen. Your turn comes next.' : 'Listen.';
   if (phase === 'listening') {
     if (reading === null) {
-      detail = anyNote ? 'Sing "ah" on any easy note.' : slide ? 'Your turn. Sing the slide.' : 'Sing it now.';
+      detail = anyNote ? 'Sing "ah" on any easy note.' : slide ? (phrase ? 'Your turn. Sing the line.' : 'Your turn. Sing the slide.') : 'Sing it now.';
     } else {
       detail = anyNote ? 'Keep it steady.' : slide ? 'Keep the ball in the ring.' : howClose(reading);
     }
@@ -248,7 +242,7 @@ export function RunView({ run }: { run: Run }) {
   let count = ' ';
   if (phase === 'listening') {
     count =
-      slide !== undefined && run.slideStartedAt === null
+      slide && run.slideStartedAt === null
         ? 'The clock starts when you do.'
         : `${seconds(timeLeftMs(run), 1)} seconds left`;
   }
@@ -258,13 +252,13 @@ export function RunView({ run }: { run: Run }) {
       <View style={styles.head}>
         <View style={styles.headText}>
           <ThemedText type="small" themeColor="textSecondary">
-            {anyNote ? 'Your note' : slide ? 'Follow the slide' : 'Match the note'}, {run.index + 1} of{' '}
+            {anyNote ? 'Your note' : phrase ? 'Sing the line' : slide ? 'Follow the slide' : 'Match the note'}, {run.index + 1} of{' '}
             {run.steps.length}
           </ThemedText>
           <ThemedText
             numberOfLines={1}
             adjustsFontSizeToFit
-            style={slide !== undefined ? styles.slideTarget : styles.target}>
+            style={slide ? styles.slideTarget : styles.target}>
             {stepLabel(step)}
           </ThemedText>
         </View>
@@ -282,8 +276,8 @@ export function RunView({ run }: { run: Run }) {
         </View>
       </View>
 
-      {slide !== undefined && step.midi !== null ? (
-        <SlideField run={run} fromMidi={step.midi} slide={slide} />
+      {path !== null ? (
+        <PathField run={run} path={path} />
       ) : (
         <NoteField reading={reading} flood={holdShare} />
       )}
@@ -292,7 +286,7 @@ export function RunView({ run }: { run: Run }) {
         <ThemedText style={styles.detail}>{detail}</ThemedText>
         <View style={styles.between}>
           <ThemedText type="smallBold">
-            {slide !== undefined
+            {slide
               ? `On the line ${onLine}%`
               : `Held in tune ${seconds(Math.min(hold.heldMs, step.holdMs), 1)} of ${wholeSeconds(step.holdMs)} seconds`}
           </ThemedText>

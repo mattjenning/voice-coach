@@ -10,7 +10,7 @@ import { Spacing } from '@/constants/theme';
 import type { Step, StepResult } from '@/lib/exercise';
 import { noteName } from '@/lib/notes';
 import { STARTS, scaleSteps, type StartChoice } from '@/lib/quick';
-import { slideSteps, type SlideOrder } from '@/lib/slide';
+import { slideSteps, type Difficulty, type SlideOrder } from '@/lib/slide';
 
 /** The kinds of practice. Step mode is the original: one note at a time up a scale. */
 type Mode = 'step' | 'slide';
@@ -43,13 +43,19 @@ const ORDERS: { order: SlideOrder; label: string }[] = [
   { order: 'random', label: 'Random' },
 ];
 
+const LEVELS: { level: Difficulty; label: string }[] = [
+  { level: 'easy', label: 'Easy' },
+  { level: 'medium', label: 'Medium' },
+  { level: 'hard', label: 'Hard' },
+];
+
 const span = (start: number) => `${noteName(start)} to ${noteName(start + 12)}`;
 
 /** What one set is called on a report card. */
-function setTitle(mode: Mode, start: number, order: SlideOrder): string {
+function setTitle(mode: Mode, start: number, order: SlideOrder, level: Difficulty): string {
   if (mode === 'step') return `Steps, ${span(start)}`;
   const label = ORDERS.find((each) => each.order === order)?.label.toLowerCase() ?? order;
-  return `Slides, ${label}, ${span(start)}`;
+  return `Slides, ${level}, ${label}, ${span(start)}`;
 }
 
 /** One finished set: what it was and how every note or slide went. */
@@ -70,20 +76,21 @@ export default function PracticeScreen() {
   const [sets, setSets] = useState<FinishedSet[]>([]);
   const [attempts, setAttempts] = useState(0);
   const [order, setOrder] = useState<SlideOrder>('up');
+  const [level, setLevel] = useState<Difficulty>('easy');
 
   const everything = sets.flatMap((set) => set.results);
   const setCount = sets.length === 1 ? '1 set' : `${sets.length} sets`;
 
   const sing = (mode: Mode, start: number, slideOrder: SlideOrder) => {
     // Random slides are picked here, once, so the set does not change under the singer.
-    const steps = mode === 'step' ? scaleSteps(start) : slideSteps(start, slideOrder, Math.random);
+    const steps = mode === 'step' ? scaleSteps(start) : slideSteps(start, slideOrder, level, Math.random);
     setAttempts(attempts + 1);
     setView({ name: 'singing', mode, start, order: slideOrder, steps, attempt: attempts + 1 });
   };
 
   if (view.name === 'singing') {
     const { mode, start } = view;
-    const title = setTitle(mode, start, view.order);
+    const title = setTitle(mode, start, view.order, level);
     return (
       <Screen title={mode === 'step' ? 'Step mode' : 'Slide mode'} subtitle={title}>
         <ExercisePlayer
@@ -169,8 +176,28 @@ export default function PracticeScreen() {
               ))}
             </View>
             <ThemedText type="small" themeColor="textSecondary">
-              Step up climbs the scale a slide at a time. Step down comes back. Random mixes
-              jumps between any two notes with slides that go up and come back down.
+              Step up climbs the scale. Step down comes back. Random goes either way.
+            </ThemedText>
+          </Card>
+        )}
+        {mode === 'slide' && (
+          <Card>
+            <Label>How hard</Label>
+            <View style={styles.row}>
+              {LEVELS.map((each) => (
+                <View key={each.level} style={styles.cell}>
+                  <Button
+                    compact
+                    label={each.label}
+                    primary={each.level === level}
+                    onPress={() => setLevel(each.level)}
+                  />
+                </View>
+              ))}
+            </View>
+            <ThemedText type="small" themeColor="textSecondary">
+              Easy slides move one note of the scale and last 4 seconds. Medium move up to three
+              and last 5. Hard move up to five, last 6, and on Random may turn round and come back.
             </ThemedText>
           </Card>
         )}
