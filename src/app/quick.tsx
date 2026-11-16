@@ -9,10 +9,12 @@ import { noteName } from '@/lib/notes';
 import { STARTS, scaleSteps, type StartChoice } from '@/lib/quick';
 
 const CHOICES: { choice: StartChoice; label: string }[] = [
+  { choice: 'bass', label: 'Bass' },
   { choice: 'low', label: 'Low' },
   { choice: 'medium', label: 'Medium' },
   { choice: 'high', label: 'High' },
-  { choice: 'top', label: 'Top' },
+  { choice: 'soprano', label: 'Soprano' },
+  { choice: 'whistle', label: 'Whistle' },
 ];
 
 const span = (start: number) => `${noteName(start)} to ${noteName(start + 12)}`;

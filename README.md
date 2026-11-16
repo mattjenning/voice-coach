@@ -10,7 +10,7 @@ Everything in the app is built from one move. The app plays a note for three sec
 
 | Mode | What it does | State |
 | --- | --- | --- |
-| Quick practice | One octave of a major scale, starting low, medium, high or top. Each note gets one attempt, then the next plays by itself. A report card follows, for the set and for the whole session, with a percent score and a letter grade. Then the scale can stay, or move down or up by one note or half an octave. | Built. Not yet run on a phone. |
+| Quick practice | One octave of a major scale, from one of six starting notes between C2 and G4. Each note gets one attempt, then the next plays by itself. A report card follows, for the set and for the whole session, with a percent score and a letter grade. Then the scale can stay, or move down or up by one note or half an octave. | Built. Not yet run on a phone. |
 | Progression | Ten guided levels. Level 1 finds your home note, the note you sing when asked for an easy one. Every later level is built from it. Levels train pitch matching, steps, jumps, range and breath control. Progress and achievements are saved on the phone. | Built. Not yet run on a phone. |
 | Song mode | Master one song a phrase at a time, by call and response. | Design only. The screen explains the design. |
 

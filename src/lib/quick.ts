@@ -1,6 +1,6 @@
 /**
- * Quick practice: one octave of a major scale, going up, starting low,
- * medium, high or top. After each set the start can move up or down by one note
+ * Quick practice: one octave of a major scale, going up, from one of six
+ * starting notes. After each set the start can move up or down by one note
  * or by half an octave.
  *
  * Pure logic.
@@ -10,21 +10,23 @@ import { HIGHEST_TONE, LOWEST_TONE, noteStep, type Step } from './exercise.ts';
 /** Semitones above the first note for do re mi fa sol la ti do. */
 export const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11, 12];
 
-export type StartChoice = 'low' | 'medium' | 'high' | 'top';
+export type StartChoice = 'bass' | 'low' | 'medium' | 'high' | 'soprano' | 'whistle';
 
 /**
  * Where each choice starts. Any octave counts when singing, so these only
  * set which octave the reference tones play in.
  *
- * Matthew set these from singing them (2026-11-16): the first medium and
- * high sat too high, so medium came down half an octave, high came down a
- * whole octave, and the old high became "top".
+ * Matthew chose these six, a fifth or a fourth apart, after singing the
+ * earlier ones (2026-11-16). The names are his labels for the app, not
+ * voice types: "whistle" here is G4 to G5.
  */
 export const STARTS: Record<StartChoice, number> = {
-  low: 45, // A2 to A3
-  medium: 46, // A♯2 to A♯3
-  high: 48, // C3 to C4
-  top: 60, // C4 to C5
+  bass: 36, // C2 to C3
+  low: 43, // G2 to G3
+  medium: 48, // C3 to C4
+  high: 55, // G3 to G4
+  soprano: 60, // C4 to C5
+  whistle: 67, // G4 to G5
 };
 
 /** The eight steps of the scale that starts on `start`. */
