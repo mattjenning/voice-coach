@@ -26,9 +26,25 @@ export type PitchListener = {
   problem: string | null;
   start: () => Promise<void>;
   stop: () => void;
-  /** Ignore the microphone for a moment, so the app does not hear its own tone. */
-  pauseFor: (ms: number) => void;
+  /**
+   * Play a sound through the speaker. If the microphone is on, it is turned
+   * off first and back on after `ms`, because an iPhone will not play sound
+   * while this kind of microphone stream is running.
+   */
+  playThrough: (play: () => void, ms: number) => Promise<void>;
 };
+
+/**
+ * Puts the phone's sound system in playing mode: sound comes out of the
+ * speaker, and plays even when the silent switch is on.
+ */
+async function switchToSpeaker(): Promise<void> {
+  try {
+    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+  } catch {
+    // If the mode cannot be set, still try to play.
+  }
+}
 
 /**
  * Listens to the microphone and reports the pitch being sung.
@@ -42,17 +58,12 @@ export function usePitch(onPitch: (hz: number | null, atMs: number) => void): Pi
   const [problem, setProblem] = useState<string | null>(null);
   const framer = useRef<Framer | null>(null);
   const smoother = useRef<PitchSmoother | null>(null);
-  const pausedUntil = useRef(0);
+  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onBuffer = (buffer: AudioStreamBuffer) => {
     const now = Date.now();
     framer.current ??= new Framer();
     smoother.current ??= new PitchSmoother();
-    if (now < pausedUntil.current) {
-      framer.current.reset();
-      smoother.current.reset();
-      return;
-    }
     const samples = firstChannel(new Float32Array(buffer.data), buffer.channels);
     const factor = thinningFactor(buffer.sampleRate);
     const rate = buffer.sampleRate / factor;
@@ -68,23 +79,17 @@ export function usePitch(onPitch: (hz: number | null, atMs: number) => void): Pi
 
   const { stream } = useAudioStream({ channels: 1, encoding: 'float32', onBuffer });
 
-  const start = async () => {
-    // On the web, this version of expo-audio hands back no stream at all.
-    if (!stream) {
-      setStatus('unsupported');
-      return;
+  const cancelResume = () => {
+    if (resumeTimer.current !== null) {
+      clearTimeout(resumeTimer.current);
+      resumeTimer.current = null;
     }
-    setStatus('starting');
-    setProblem(null);
+  };
+
+  /** Turn the microphone stream on. Starting it puts the phone in record-only mode. */
+  const begin = async () => {
+    if (!stream) return;
     try {
-      const permission = await requestRecordingPermissionsAsync();
-      if (!permission.granted) {
-        setStatus('denied');
-        return;
-      }
-      // Lets the app record and play its reference tone in the same session,
-      // and keeps the tone audible when the phone's silent switch is on.
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       framer.current?.reset();
       smoother.current?.reset();
       await stream.start();
@@ -95,26 +100,66 @@ export function usePitch(onPitch: (hz: number | null, atMs: number) => void): Pi
     }
   };
 
+  const start = async () => {
+    // On the web, this version of expo-audio hands back no stream at all.
+    if (!stream) {
+      setStatus('unsupported');
+      return;
+    }
+    cancelResume();
+    setStatus('starting');
+    setProblem(null);
+    try {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        setStatus('denied');
+        return;
+      }
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+      setStatus('failed');
+      return;
+    }
+    await begin();
+  };
+
   const stop = () => {
-    stream?.stop();
+    cancelResume();
+    if (stream?.isStreaming) stream.stop();
     setStatus('off');
   };
 
-  const pauseFor = (ms: number) => {
-    pausedUntil.current = Date.now() + ms;
+  const playThrough = async (play: () => void, ms: number) => {
+    const resumeAfter = status === 'on';
+    cancelResume();
+    if (stream?.isStreaming) stream.stop();
+    await switchToSpeaker();
+    play();
+    if (resumeAfter) {
+      resumeTimer.current = setTimeout(() => {
+        resumeTimer.current = null;
+        begin();
+      }, ms);
+    }
   };
 
   // Stop listening when the app leaves the screen. A microphone left running
   // in the background is the kind of surprise nobody wants.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active' && stream?.isStreaming) {
-        stream.stop();
-        setStatus('off');
+      if (state === 'active') return;
+      if (resumeTimer.current !== null) {
+        clearTimeout(resumeTimer.current);
+        resumeTimer.current = null;
       }
+      if (stream?.isStreaming) stream.stop();
+      setStatus((current) => (current === 'on' ? 'off' : current));
     });
-    return () => subscription.remove();
+    return () => {
+      subscription.remove();
+      if (resumeTimer.current !== null) clearTimeout(resumeTimer.current);
+    };
   }, [stream]);
 
-  return { status, problem, start, stop, pauseFor };
+  return { status, problem, start, stop, playThrough };
 }

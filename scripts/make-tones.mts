@@ -5,9 +5,10 @@
  * It writes assets/tones/<note number>.wav and src/data/tones.ts, the list
  * the app reads. Both are generated. Change this script, not those files.
  *
- * Each tone is the note plus a few quieter overtones. A phone speaker cannot
- * play the lowest notes' fundamentals, but the ear still hears the right
- * pitch from the overtones.
+ * Each tone is the note plus seven overtones, nearly as loud as the note
+ * itself. A phone speaker cannot play low notes: it is silent below about
+ * 300 Hz, and C3 is 131 Hz. The ear works out the pitch from the overtones
+ * alone, so a tone rich in them stays audible and still sounds like C3.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 
@@ -19,14 +20,16 @@ const LOWEST = LOWEST_TARGET;
 const HIGHEST = HIGHEST_TARGET;
 const RATE = 16_000;
 const SECONDS = 1.2;
-const OVERTONES = [1, 0.5, 0.3, 0.15];
+const OVERTONES = [1, 0.71, 0.58, 0.5, 0.45, 0.41, 0.38, 0.35];
+/** The loudest sample in every tone, where 1 is the most a file can hold. */
+const PEAK = 0.9;
 const FADE_IN = 0.03;
 const FADE_OUT = 0.3;
 
 function tone(hz: number): Float32Array {
   const count = Math.round(RATE * SECONDS);
-  const total = OVERTONES.reduce((sum, value) => sum + value, 0);
   const out = new Float32Array(count);
+  let loudest = 0;
   for (let i = 0; i < count; i++) {
     const seconds = i / RATE;
     let sample = 0;
@@ -34,8 +37,10 @@ function tone(hz: number): Float32Array {
       sample += OVERTONES[k] * Math.sin(2 * Math.PI * hz * (k + 1) * seconds);
     }
     const fade = Math.min(1, seconds / FADE_IN, (SECONDS - seconds) / FADE_OUT);
-    out[i] = (0.8 * sample * fade) / total;
+    out[i] = sample * fade;
+    loudest = Math.max(loudest, Math.abs(out[i]));
   }
+  for (let i = 0; i < count; i++) out[i] = (out[i] * PEAK) / loudest;
   return out;
 }
 

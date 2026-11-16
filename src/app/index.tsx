@@ -19,8 +19,8 @@ import {
   type Practice,
 } from '@/lib/practice';
 
-/** The reference tone lasts 1.2 seconds. Ignore the microphone a little longer than that. */
-const TONE_PAUSE_MS = 1500;
+/** The reference tone lasts 1.2 seconds. Listen again a moment after it ends. */
+const TONE_MS = 1350;
 /** The meter shows half a semitone either side of the target. */
 const METER_RANGE_CENTS = 50;
 
@@ -204,11 +204,14 @@ export default function PracticeScreen() {
   const trouble = statusLine(pitch.status, pitch.problem);
 
   const hear = () => {
-    // The microphone would hear the phone's own tone and score it as singing.
-    pitch.pauseFor(TONE_PAUSE_MS);
+    // The phone cannot play the tone while the microphone stream is running,
+    // so listening pauses for the length of the tone. That also stops the app
+    // from hearing its own speaker and scoring it as singing.
     dispatch({ type: 'quiet' });
-    player.seekTo(0);
-    player.play();
+    pitch.playThrough(() => {
+      player.seekTo(0);
+      player.play();
+    }, TONE_MS);
   };
 
   const toggle = () => {

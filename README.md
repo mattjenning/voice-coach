@@ -62,14 +62,15 @@ The check for this sings a made-up six-note phrase, with vibrato, a repeated not
 - **Pitch detection is written here, not imported.** It is about a hundred lines, it is the heart of the app, and owning it means it can be tuned for singing.
 - **Any octave counts.** A low voice can practise a note written for a high one.
 - **The voice stays on the phone.** Sound is analyzed a slice at a time and thrown away. Nothing is recorded or sent anywhere.
-- **The microphone is ignored while the reference tone plays**, so the app does not score its own speaker.
+- **The microphone turns off while the reference tone plays.** On an iPhone, `expo-audio`'s microphone stream puts the phone in record-only mode, and nothing can play until the stream stops. Pausing it also keeps the app from scoring its own speaker.
+- **Reference tones are rich in overtones.** A phone speaker is silent below about 300 Hz, so a plain low note would not be heard.
 
 ## Not yet proven
 
 These need a real iPhone and have not been tried:
 
 1. That the microphone stream works inside Expo Go. The Expo documentation lists `expo-audio` as included in Expo Go but says nothing specific about streaming.
-2. That the reference tone is loud enough once the microphone is on. iPhones can route sound to the quiet earpiece while recording.
+2. That the reference tone can be heard. The first build was silent on a real iPhone (2026-11-16). The fix has not been confirmed yet.
 3. How the detector does on a real voice, as opposed to made-up tones.
 4. `npx expo lint` has never run. The linter would not install in the build environment.
 
