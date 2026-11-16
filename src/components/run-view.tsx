@@ -21,7 +21,7 @@ import { stepLabel } from '@/lib/slide';
  * The one loud thing on this screen is the pitch field. Pitch runs up and
  * down it, as pitch does: sing sharp and your mark rises, sing flat and it
  * sinks. The heavy line across the middle is the note. While you are on it,
- * buff floods in from the left, and when the buff reaches the far side
+ * yellow floods in from the left, and when the yellow reaches the far side
  * the note is yours. Everything else on the screen stays quiet.
  */
 
@@ -130,7 +130,7 @@ function SlideField({ run, fromMidi, slide }: { run: Run; fromMidi: number; slid
   );
 }
 
-/** One square per step: buff for matched, tangerine for missed, outlined for the one in play. */
+/** One square per step: yellow for matched, tangerine for missed, outlined for the one in play. */
 function StepMarks({ run }: { run: Run }) {
   const theme = useTheme();
   return (

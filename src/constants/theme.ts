@@ -12,15 +12,12 @@ import { Platform } from 'react-native';
  * with two spot colors that each mean one thing.
  *
  *   voice  tangerine  where your voice is
- *   tune   buff       in tune; it floods the pitch field as you hold a note
+ *   tune   yellow     in tune; it floods the pitch field as you hold a note
  *
- * The buff is Cinnamon Buff from Sanzo Wada's A Dictionary of Color
- * Combinations (#FDC57E in the open dataset of the book), which pairs it
- * with a deep blue. Matthew suggested it in place of the first yellow
- * (2026-11-16).
+ * Nothing is black, white or grey.
  *
- * Nothing is black, white or grey. Dark mode swaps ink and paper and keeps
- * the spot colors.
+ * The app ships dark: `dark` below is the look in use. `light` is the same
+ * poster printed on pale paper, kept in case a choice is offered later.
  */
 export const Colors = {
   light: {
@@ -34,9 +31,9 @@ export const Colors = {
     textSecondary: '#55518F',
     /** The pitch field at rest. Pale in both modes, so its ink marks always show. */
     field: '#DBDFF7',
-    /** In tune: Cinnamon Buff. A fill, never a text color: it is too faint on paper to read. */
-    tune: '#FDC57E',
-    /** Text and marks that sit on the field or the buff. Indigo in both modes. */
+    /** In tune. A fill, never a text color: yellow on paper is too faint to read. */
+    tune: '#FFCB1F',
+    /** Text and marks that sit on the field or the yellow. Indigo in both modes. */
     onTune: '#1C1660',
     /** Where your voice is. A fill. */
     voice: '#FF5A36',
@@ -50,7 +47,7 @@ export const Colors = {
     backgroundSelected: '#261E74',
     textSecondary: '#A9A8E0',
     field: '#DBDFF7',
-    tune: '#FDC57E',
+    tune: '#FFCB1F',
     onTune: '#1C1660',
     voice: '#FF6E4E',
     off: '#FF9A82',

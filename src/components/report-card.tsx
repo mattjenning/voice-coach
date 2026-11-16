@@ -35,7 +35,7 @@ function attempt(result: StepResult): string {
 
 /**
  * One line per note. The square at the left is the same mark the note had
- * while it was being sung: buff for matched, tangerine for missed.
+ * while it was being sung: yellow for matched, tangerine for missed.
  */
 function NoteRows({ results }: { results: StepResult[] }) {
   const theme = useTheme();
@@ -91,7 +91,7 @@ export function ReportCard({
     <Card>
       <Label>{title}</Label>
       <View style={styles.top}>
-        {/* The grade sits on a block of buff when it is an A or a B. */}
+        {/* The grade sits on a block of yellow when it is an A or a B. */}
         <View
           style={[
             styles.gradeBlock,

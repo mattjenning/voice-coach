@@ -76,11 +76,11 @@ The check for this sings a made-up six-note phrase, with vibrato, a repeated not
 
 ## The look
 
-A two-ink gig poster. Deep indigo on pale periwinkle, set in a condensed poster typeface (Big Shoulders), flush left, with ink rules between sections and no boxes. Two spot colors each mean one thing: tangerine is where your voice is, buff is in tune. The buff is Cinnamon Buff from Sanzo Wada's *A Dictionary of Color Combinations*, which pairs it with a deep blue.
+A two-ink gig poster, printed dark: pale periwinkle ink on deep indigo, set in a condensed poster typeface (Big Shoulders), flush left, with ink rules between sections and no boxes. Two spot colors each mean one thing: tangerine is where your voice is, yellow is in tune.
 
-The one loud element is the pitch field. Pitch runs up and down it. While you hold the note, buff floods in from the left, and when it reaches the far side the note is matched. Everything else stays quiet.
+The one loud element is the pitch field. Pitch runs up and down it. While you hold the note, yellow floods in from the left, and when it reaches the far side the note is matched. Everything else stays quiet.
 
-Nothing is black, white or grey. Dark mode swaps ink and paper and keeps the spot colors. The tokens are in `src/constants/theme.ts`.
+Nothing is black, white or grey. The app is always dark, whatever the phone is set to; Matthew picked dark with yellow over a light version and over three colors from Sanzo Wada's *A Dictionary of Color Combinations*. The tokens are in `src/constants/theme.ts`.
 
 ## Decisions
 
