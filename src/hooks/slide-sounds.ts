@@ -45,9 +45,17 @@ function pathPlayer(step: Step, path: Path, fromMidi: number): AudioPlayer {
   return player;
 }
 
+/** A sound ready to play, and how long it lasts. */
+export type Sound = { player: AudioPlayer; ms: number };
+
+/** How long a reference tone file lasts. Set in scripts/make-tones.mts. */
+const TONE_MS = 3000;
+
 /** The sound to play before a step, or null for a step with no sound. */
-export function stepPlayer(step: Step): AudioPlayer | null {
+export function stepSound(step: Step): Sound | null {
   if (step.midi === null) return null;
   const path = stepPath(step);
-  return path === null ? tonePlayer(step.midi) : pathPlayer(step, path, step.midi);
+  return path === null
+    ? { player: tonePlayer(step.midi), ms: TONE_MS }
+    : { player: pathPlayer(step, path, step.midi), ms: path.totalMs };
 }

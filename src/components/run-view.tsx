@@ -181,7 +181,9 @@ function PathField({ run, path }: { run: Run; path: Path }) {
   const sungFor =
     run.slideStartedAt === null || run.clockMs === null ? null : run.clockMs - run.slideStartedAt;
   // Where the tone is right now: while it plays, or on your turn once you have started.
-  const toneAt = playing ? (heardFor > 0 ? heardFor : null) : sungFor;
+  // On your turn, before you start, the ring waits at the beginning of the path.
+  const waiting = run.phase === 'listening' && sungFor === null;
+  const toneAt = playing ? (heardFor > 0 ? heardFor : null) : waiting ? 0 : sungFor;
   const ring = toneAt === null ? null : Math.min(toneAt, total);
   const voice =
     !playing && ring !== null && run.reading !== null

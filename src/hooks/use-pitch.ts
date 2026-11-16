@@ -9,6 +9,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
+import type { Sound } from '@/hooks/slide-sounds';
 import { Framer, firstChannel, thinningFactor } from '@/lib/frames';
 import { PitchSmoother, detectPitch, level } from '@/lib/pitch';
 
@@ -41,13 +42,17 @@ export type PitchListener = {
    * The two cannot overlap. On an iPhone this kind of microphone stream puts
    * the phone in record-only mode, and nothing plays until it stops.
    */
-  playThenListen: (player: AudioPlayer | null) => Promise<RoundStart>;
+  playThenListen: (sound: Sound | null) => Promise<RoundStart>;
   /** Turn everything off: the sound if it is playing, the microphone if it is on. */
   stop: () => void;
 };
 
-/** If a sound never reports that it ended, stop waiting after this long. */
-const LONGEST_SOUND_MS = 7000;
+/**
+ * If a sound never reports that it ended, stop waiting this long after it
+ * should have. The wait has to be longer than the sound: a fixed limit once
+ * cut the last note off a long song line.
+ */
+const PATIENCE_MS = 2500;
 
 /**
  * Puts the phone's sound system back in normal playing mode: sound comes out
@@ -73,7 +78,7 @@ async function switchToSpeaker(): Promise<void> {
  * Play a sound from the start and wait until it ends. If it has not loaded
  * yet, wait for that first. Returns a function that gives up waiting.
  */
-function playToEnd(player: AudioPlayer, done: () => void): () => void {
+function playToEnd(player: AudioPlayer, ms: number, done: () => void): () => void {
   let started = false;
   let startedAt = 0;
   let finished = false;
@@ -104,7 +109,7 @@ function playToEnd(player: AudioPlayer, done: () => void): () => void {
     // Ignore an "ended" left over from the last time this sound played.
     else if (startedAt > 0 && status.didJustFinish && Date.now() - startedAt > 300) finish();
   });
-  const timer = setTimeout(finish, LONGEST_SOUND_MS);
+  const timer = setTimeout(finish, ms + PATIENCE_MS);
   // A sound made a moment ago may still be loading, and its "loaded" message
   // can be missed. So ask it directly, a few times a second, until it is.
   const ask = setInterval(() => {
@@ -186,7 +191,7 @@ export function usePitch(
   }, [stream]);
 
   const playThenListen = useCallback(
-    async (player: AudioPlayer | null): Promise<RoundStart> => {
+    async (playing: Sound | null): Promise<RoundStart> => {
       stop();
       const mine = run.current;
       const fail = (error: unknown): RoundStart => {
@@ -215,15 +220,23 @@ export function usePitch(
       }
       if (mine !== run.current) return 'cancelled';
 
-      if (player !== null) {
+      if (playing !== null) {
+        const { player, ms } = playing;
         await switchToSpeaker();
         if (mine !== run.current) return 'cancelled';
 
         await new Promise<void>((resolve) => {
-          sound.current = { player, giveUp: playToEnd(player, resolve) };
+          sound.current = { player, giveUp: playToEnd(player, ms, resolve) };
         });
         if (mine !== run.current) return 'cancelled';
         sound.current = null;
+        // Make sure the sound has let go of the speaker before the microphone
+        // takes over. A sound still playing can leave the microphone deaf.
+        try {
+          player.pause();
+        } catch {
+          // The sound has already gone.
+        }
       }
 
       try {

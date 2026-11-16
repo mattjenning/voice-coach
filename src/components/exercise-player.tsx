@@ -4,7 +4,7 @@ import { AppState } from 'react-native';
 import { RunView } from '@/components/run-view';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui';
-import { stepPlayer } from '@/hooks/slide-sounds';
+import { stepSound } from '@/hooks/slide-sounds';
 import { usePitch, type Listening } from '@/hooks/use-pitch';
 import { NO_RUN, runReducer, type Run, type Step, type StepResult } from '@/lib/exercise';
 
@@ -53,7 +53,7 @@ export function ExercisePlayer({
   useEffect(() => {
     if (phase !== 'tone' || step === undefined) return;
     let current = true;
-    playThenListen(stepPlayer(step))
+    playThenListen(stepSound(step))
       .catch(() => 'failed' as const)
       .then((outcome) => {
         if (!current) return;
@@ -66,7 +66,7 @@ export function ExercisePlayer({
 
   // Get the next step's sound ready while this one is in play.
   useEffect(() => {
-    if (next !== undefined) stepPlayer(next);
+    if (next !== undefined) stepSound(next);
   }, [next]);
 
   // Keep the countdown moving even if no sound arrives.
