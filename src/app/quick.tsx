@@ -12,6 +12,7 @@ const CHOICES: { choice: StartChoice; label: string }[] = [
   { choice: 'low', label: 'Low' },
   { choice: 'medium', label: 'Medium' },
   { choice: 'high', label: 'High' },
+  { choice: 'top', label: 'Top' },
 ];
 
 const span = (start: number) => `${noteName(start)} to ${noteName(start + 12)}`;

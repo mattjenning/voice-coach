@@ -1,6 +1,6 @@
 /**
  * Quick practice: one octave of a major scale, going up, starting low,
- * medium or high. After each set the start can move up or down by one note
+ * medium, high or top. After each set the start can move up or down by one note
  * or by half an octave.
  *
  * Pure logic.
@@ -10,16 +10,21 @@ import { HIGHEST_TONE, LOWEST_TONE, noteStep, type Step } from './exercise.ts';
 /** Semitones above the first note for do re mi fa sol la ti do. */
 export const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11, 12];
 
-export type StartChoice = 'low' | 'medium' | 'high';
+export type StartChoice = 'low' | 'medium' | 'high' | 'top';
 
 /**
  * Where each choice starts. Any octave counts when singing, so these only
  * set which octave the reference tones play in.
+ *
+ * Matthew set these from singing them (2026-11-16): the first medium and
+ * high sat too high, so medium came down half an octave, high came down a
+ * whole octave, and the old high became "top".
  */
 export const STARTS: Record<StartChoice, number> = {
   low: 45, // A2 to A3
-  medium: 52, // E3 to E4
-  high: 60, // C4 to C5
+  medium: 46, // A♯2 to A♯3
+  high: 48, // C3 to C4
+  top: 60, // C4 to C5
 };
 
 /** The eight steps of the scale that starts on `start`. */

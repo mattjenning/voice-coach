@@ -392,7 +392,11 @@ assert.equal(currentStep(NO_RUN), null);
 assert.deepEqual(MAJOR_SCALE, [0, 2, 4, 5, 7, 9, 11, 12]);
 assert.deepEqual(
   scaleSteps(STARTS.medium).map((step) => noteName(step.midi ?? 0)),
-  ['E3', 'F♯3', 'G♯3', 'A3', 'B3', 'C♯4', 'D♯4', 'E4'],
+  ['A♯2', 'C3', 'D3', 'D♯3', 'F3', 'G3', 'A3', 'A♯3'],
+);
+assert.deepEqual(
+  Object.entries(STARTS).map(([choice, start]) => `${choice} ${noteName(start)}`),
+  ['low A2', 'medium A♯2', 'high C3', 'top C4'],
 );
 assert.deepEqual(SHIFTS.map((shift) => shift.by), [-6, -1, 0, 1, 6]);
 
