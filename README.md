@@ -76,11 +76,13 @@ The check for this sings a made-up six-note phrase, with vibrato, a repeated not
 
 ## The look
 
-A two-ink gig poster, printed dark: pale periwinkle ink on deep indigo, set in a condensed poster typeface (Big Shoulders), flush left, with ink rules between sections and no boxes. Two spot colors each mean one thing: tangerine is where your voice is, yellow is in tune.
+Always dark: pale periwinkle ink on deep indigo, whatever the phone is set to. Nothing is black, white or grey. Two spot colors each mean one thing: tangerine is where your voice is, yellow is in tune.
+
+Type is the phone's own typeface, set large and light for titles and note names, with the weight saved for small text. Everything is flush left, with thin rules between rows and no boxes.
 
 The one loud element is the pitch field. Pitch runs up and down it. While you hold the note, yellow floods in from the left, and when it reaches the far side the note is matched. Everything else stays quiet.
 
-Nothing is black, white or grey. The app is always dark, whatever the phone is set to; Matthew picked dark with yellow over a light version and over three colors from Sanzo Wada's *A Dictionary of Color Combinations*. The tokens are in `src/constants/theme.ts`.
+Matthew set the direction on 2026-11-16: dark with yellow over a light version and over three colors from Sanzo Wada's *A Dictionary of Color Combinations*, the phone's typeface over a condensed poster face, and no heavy rule under titles. The tokens are in `src/constants/theme.ts`.
 
 ## Decisions
 

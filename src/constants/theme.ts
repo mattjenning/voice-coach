@@ -8,7 +8,7 @@ import '@/global.css';
 import { Platform } from 'react-native';
 
 /**
- * The look: a two-ink gig poster. Deep indigo ink on pale periwinkle paper,
+ * The look: two inks and two spot colors. Deep indigo and pale periwinkle,
  * with two spot colors that each mean one thing.
  *
  *   voice  tangerine  where your voice is
@@ -91,7 +91,27 @@ export const Spacing = {
   six: 64,
 } as const;
 
-/** The poster typeface, used for titles, note names and buttons. Loaded in the root layout. */
-export const DisplayFont = 'BigShoulders_800ExtraBold';
+/**
+ * Type. The app uses the phone's own typeface throughout, so every screen
+ * matches from the first instant and nothing has to load.
+ *
+ * Big text is set light and given room: a line height well above the letter
+ * size, so tall letters and tails are never cut off. Small text carries the
+ * weight instead.
+ */
+export const Type = {
+  /** A screen's name. */
+  title: { fontSize: 46, lineHeight: 56, fontWeight: '400' },
+  /** A row in a list, or a section's main line. */
+  heading: { fontSize: 30, lineHeight: 38, fontWeight: '400' },
+  /** The note to sing. The largest thing on the screen. */
+  note: { fontSize: 72, lineHeight: 86, fontWeight: '500' },
+  /** The note being sung, and other mid-sized figures. */
+  figure: { fontSize: 40, lineHeight: 48, fontWeight: '500' },
+  /** A letter grade. */
+  grade: { fontSize: 92, lineHeight: 110, fontWeight: '500' },
+  /** The words on a button. */
+  action: { fontSize: 19, lineHeight: 24, fontWeight: '600' },
+} as const;
 
 export const MaxContentWidth = 560;

@@ -2,7 +2,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Card, Label } from '@/components/ui';
-import { DisplayFont, Spacing } from '@/constants/theme';
+import { Spacing, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { StepResult } from '@/lib/exercise';
 import { HOLD } from '@/lib/hold';
@@ -137,18 +137,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  grade: {
-    fontFamily: DisplayFont,
-    fontSize: 104,
-    lineHeight: 108,
-  },
+  grade: Type.grade,
   facts: {
     flex: 1,
   },
   score: {
-    fontFamily: DisplayFont,
-    fontSize: 44,
-    lineHeight: 46,
+    ...Type.figure,
     fontVariant: ['tabular-nums'],
   },
   fact: {

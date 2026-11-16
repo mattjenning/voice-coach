@@ -5,16 +5,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { DisplayFont, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 /**
  * The shared pieces of every screen.
  *
- * The layout borrows from a printed gig poster and a set list: big
- * condensed titles, everything flush left, and ink rules between sections.
- * There are no boxes. A thing you can press is either a solid block of ink
- * or a row in a list.
+ * The layout is a set list: large light titles, everything flush left, and
+ * thin rules between rows. There are no boxes. A thing you can press is
+ * either a solid block of ink or a row in a list.
  */
 
 export function Button({
@@ -117,7 +116,7 @@ export function ListRow({
   );
 }
 
-/** The frame every screen shares: a poster title over a heavy rule, then scrolling content. */
+/** The frame every screen shares: a large title, a line about the screen, then scrolling content. */
 export function Screen({
   title,
   subtitle,
@@ -129,7 +128,6 @@ export function Screen({
   back?: boolean;
   children: ReactNode;
 }) {
-  const theme = useTheme();
   return (
     <ThemedView style={styles.screen}>
       <SafeAreaView style={styles.safeArea}>
@@ -141,7 +139,6 @@ export function Screen({
               </Pressable>
             )}
             <ThemedText type="title">{title}</ThemedText>
-            <View style={[styles.headRule, { backgroundColor: theme.text }]} />
             {subtitle !== undefined && <ThemedText themeColor="textSecondary">{subtitle}</ThemedText>}
           </View>
           {children}
@@ -168,12 +165,8 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: Spacing.four,
-    gap: Spacing.two,
-  },
-  headRule: {
-    height: 6,
-    marginTop: Spacing.one,
-    marginBottom: Spacing.one,
+    paddingBottom: Spacing.two,
+    gap: Spacing.one,
   },
   section: {
     borderTopWidth: 2,
@@ -210,9 +203,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buttonLabel: {
-    fontFamily: DisplayFont,
-    fontSize: 24,
-    lineHeight: 28,
+    ...Type.action,
     textAlign: 'center',
   },
   compact: {

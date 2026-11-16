@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { DisplayFont, Spacing } from '@/constants/theme';
+import { Spacing, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   SLIDE_TOLERANCE_CENTS,
@@ -248,18 +248,12 @@ const styles = StyleSheet.create({
   headText: {
     flex: 1,
   },
-  target: {
-    fontFamily: DisplayFont,
-    fontSize: 72,
-    lineHeight: 72,
-  },
+  target: Type.note,
   sungBlock: {
     alignItems: 'flex-end',
   },
   sung: {
-    fontFamily: DisplayFont,
-    fontSize: 40,
-    lineHeight: 44,
+    ...Type.figure,
     fontVariant: ['tabular-nums'],
   },
   field: {
