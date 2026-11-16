@@ -117,8 +117,8 @@ export function ListRow({
 }
 
 /**
- * The frame every screen shares: the screen's name in turquoise at the very
- * top, a line about the screen, then the content. It all scrolls together.
+ * The frame every screen shares: the screen's name at the very top, a line
+ * about the screen, then the content. It all scrolls together.
  */
 export function Screen({
   title,
@@ -143,9 +143,7 @@ export function Screen({
                 </ThemedText>
               </Pressable>
             )}
-            <ThemedText type="title" themeColor="accent">
-              {title}
-            </ThemedText>
+            <ThemedText type="title">{title}</ThemedText>
             {subtitle !== undefined && <ThemedText themeColor="textSecondary">{subtitle}</ThemedText>}
           </View>
           {children}

@@ -11,7 +11,7 @@ import { Platform } from 'react-native';
  * The look: two inks and two spot colors. Deep indigo and pale periwinkle,
  * with three spot colors that each mean one thing.
  *
- *   accent turquoise  things you press, and the name at the top of a screen
+ *   accent turquoise  things you press
  *   voice  tangerine  where your voice is
  *   tune   yellow     in tune; it floods the pitch field as you hold a note
  *
@@ -33,7 +33,7 @@ export const Colors = {
     /** The pitch field at rest. Pale in both modes, so its ink marks always show. */
     field: '#DBDFF7',
     /**
-     * Things you press, and the name at the top of every screen. Turquoise
+     * Things you press: buttons and the link back. Turquoise
      * Green from Sanzo Wada's A Dictionary of Color Combinations. It is a cool
      * color, close to the indigo, so it never competes with the yellow.
      */
