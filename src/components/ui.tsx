@@ -13,7 +13,7 @@ import { useTheme } from '@/hooks/use-theme';
  *
  * The layout is a set list: large light titles, everything flush left, and
  * thin rules between rows. There are no boxes. A thing you can press is
- * either a solid block of ink or a row in a list.
+ * either turquoise or a row in a list.
  */
 
 export function Button({
@@ -27,7 +27,7 @@ export function Button({
   label: string;
   onPress: () => void;
   disabled?: boolean;
-  /** A solid block of ink: the one thing to do next. Others are outlined. */
+  /** A solid block of turquoise: the one thing to do next. Others are outlined in it. */
   primary?: boolean;
   /** Smaller type and less padding, for a row of several buttons. */
   compact?: boolean;
@@ -43,15 +43,15 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        { borderColor: theme.text, backgroundColor: primary ? theme.text : 'transparent' },
+        { borderColor: theme.accent, backgroundColor: primary ? theme.accent : 'transparent' },
         compact && styles.compact,
-        pressed && { backgroundColor: primary ? theme.textSecondary : theme.backgroundSelected },
+        pressed && (primary ? styles.pressed : { backgroundColor: theme.backgroundSelected }),
         disabled && styles.disabled,
       ]}>
       <ThemedText
         style={[
           compact ? styles.compactLabel : styles.buttonLabel,
-          { color: primary ? theme.background : theme.text },
+          { color: primary ? theme.onAccent : theme.accent },
         ]}>
         {label}
       </ThemedText>
@@ -116,7 +116,10 @@ export function ListRow({
   );
 }
 
-/** The frame every screen shares: a large title, a line about the screen, then scrolling content. */
+/**
+ * The frame every screen shares: a turquoise banner across the very top with
+ * the screen's name, which stays put, and scrolling content under it.
+ */
 export function Screen({
   title,
   subtitle,
@@ -128,22 +131,28 @@ export function Screen({
   back?: boolean;
   children: ReactNode;
 }) {
+  const theme = useTheme();
   return (
     <ThemedView style={styles.screen}>
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.header}>
-            {back && (
-              <Pressable accessibilityRole="button" hitSlop={12} onPress={() => router.back()}>
-                <ThemedText type="smallBold">‹ Modes</ThemedText>
-              </Pressable>
-            )}
-            <ThemedText type="title">{title}</ThemedText>
-            {subtitle !== undefined && <ThemedText themeColor="textSecondary">{subtitle}</ThemedText>}
-          </View>
-          {children}
-        </ScrollView>
+      {/* The banner's color runs up behind the clock and battery. */}
+      <SafeAreaView edges={['top']} style={{ backgroundColor: theme.accent }}>
+        <View style={styles.banner}>
+          {back && (
+            <Pressable accessibilityRole="button" hitSlop={12} onPress={() => router.back()}>
+              <ThemedText type="smallBold" style={{ color: theme.onAccent }}>
+                ‹ Modes
+              </ThemedText>
+            </Pressable>
+          )}
+          <ThemedText type="title" style={{ color: theme.onAccent }}>
+            {title}
+          </ThemedText>
+        </View>
       </SafeAreaView>
+      <ScrollView style={styles.body} contentContainerStyle={styles.content}>
+        {subtitle !== undefined && <ThemedText themeColor="textSecondary">{subtitle}</ThemedText>}
+        {children}
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -152,7 +161,15 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  safeArea: {
+  banner: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.three,
+  },
+  body: {
     flex: 1,
     width: '100%',
     maxWidth: MaxContentWidth,
@@ -160,13 +177,12 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.four,
     paddingBottom: Spacing.six,
     gap: Spacing.four,
   },
-  header: {
-    paddingTop: Spacing.four,
-    paddingBottom: Spacing.two,
-    gap: Spacing.one,
+  pressed: {
+    opacity: 0.75,
   },
   section: {
     borderTopWidth: 2,

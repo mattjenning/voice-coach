@@ -10,8 +10,8 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   return (
     <ThemeProvider value={DarkTheme}>
-      {/* The app is always dark, so the clock and battery at the top are always light. */}
-      <StatusBar style="light" />
+      {/* The clock and battery sit on the pale turquoise banner, so they are drawn dark. */}
+      <StatusBar style="dark" />
       <AnimatedSplashOverlay />
       <Stack
         screenOptions={{

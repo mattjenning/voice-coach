@@ -78,7 +78,7 @@ The check for this sings a made-up six-note phrase, with vibrato, a repeated not
 
 ## The look
 
-Always dark: pale periwinkle ink on deep indigo, whatever the phone is set to. Nothing is black, white or grey. Two spot colors each mean one thing: tangerine is where your voice is, yellow is in tune.
+Always dark: pale periwinkle ink on deep indigo, whatever the phone is set to. Nothing is black, white or grey. Three spot colors each mean one thing: turquoise is what you press and the banner across the top of every screen, tangerine is where your voice is, yellow is in tune. The turquoise is Turquoise Green from Sanzo Wada's *A Dictionary of Color Combinations*.
 
 Type is the phone's own typeface, set large and light for titles and note names, with the weight saved for small text. Everything is flush left, with thin rules between rows and no boxes.
 
