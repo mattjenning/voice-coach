@@ -7,13 +7,15 @@ import { ShiftButtons } from '@/components/shift-buttons';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Label, ListRow, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import type { Step, StepResult } from '@/lib/exercise';
+import { volumeSteps, type Step, type StepResult } from '@/lib/exercise';
 import { noteName } from '@/lib/notes';
 import { STARTS, scaleSteps, type StartChoice } from '@/lib/quick';
 import { slideSteps, type Difficulty, type SlideOrder } from '@/lib/slide';
 
 /** The kinds of practice. Step mode is the original: one note at a time up a scale. */
-type Mode = 'step' | 'slide';
+type Mode = 'step' | 'slide' | 'volume';
+
+const TITLES: Record<Mode, string> = { step: 'Step mode', slide: 'Slide mode', volume: 'Volume match' };
 
 const MODES: { mode: Mode; title: string; line: string }[] = [
   {
@@ -25,6 +27,11 @@ const MODES: { mode: Mode; title: string; line: string }[] = [
     mode: 'slide',
     title: 'Slide mode',
     line: 'Seven slides from one note to another. The app plays each glide first, then you follow it.',
+  },
+  {
+    mode: 'volume',
+    title: 'Volume match',
+    line: 'Sing soft, then loud, so the app learns your range. Then hit five loudness targets.',
   },
 ];
 
@@ -53,6 +60,7 @@ const span = (start: number) => `${noteName(start)} to ${noteName(start + 12)}`;
 
 /** What one set is called on a report card. */
 function setTitle(mode: Mode, start: number, order: SlideOrder, level: Difficulty): string {
+  if (mode === 'volume') return `Volume match on ${noteName(start)}`;
   if (mode === 'step') return `Steps, ${span(start)}`;
   const label = ORDERS.find((each) => each.order === order)?.label.toLowerCase() ?? order;
   return `Slides, ${level}, ${label}, ${span(start)}`;
@@ -79,11 +87,30 @@ export default function PracticeScreen() {
   const [level, setLevel] = useState<Difficulty>('easy');
 
   const everything = sets.flatMap((set) => set.results);
+
+  // Your best note: the plain note you have matched most closely this session.
+  // Before any set is finished, C3 stands in. Any note works for loudness.
+  let bestNote = 48;
+  let bestMiss = Infinity;
+  for (const result of everything) {
+    const plain = result.step.slide === undefined && result.step.phrase === undefined;
+    if (!plain || !result.matched || result.step.midi === null || result.closestCents === null) continue;
+    if (Math.abs(result.closestCents) < bestMiss) {
+      bestMiss = Math.abs(result.closestCents);
+      bestNote = result.sungMidi ?? result.step.midi;
+    }
+  }
+  bestNote = Math.min(84, Math.max(36, bestNote));
   const setCount = sets.length === 1 ? '1 set' : `${sets.length} sets`;
 
   const sing = (mode: Mode, start: number, slideOrder: SlideOrder) => {
     // Random slides are picked here, once, so the set does not change under the singer.
-    const steps = mode === 'step' ? scaleSteps(start) : slideSteps(start, slideOrder, level, Math.random);
+    const steps =
+      mode === 'volume'
+        ? volumeSteps(start)
+        : mode === 'step'
+          ? scaleSteps(start)
+          : slideSteps(start, slideOrder, level, Math.random);
     setAttempts(attempts + 1);
     setView({ name: 'singing', mode, start, order: slideOrder, steps, attempt: attempts + 1 });
   };
@@ -92,7 +119,7 @@ export default function PracticeScreen() {
     const { mode, start } = view;
     const title = setTitle(mode, start, view.order, level);
     return (
-      <Screen title={mode === 'step' ? 'Step mode' : 'Slide mode'} subtitle={title}>
+      <Screen title={TITLES[mode]} subtitle={title}>
         <ExercisePlayer
           key={view.attempt}
           steps={view.steps}
@@ -104,7 +131,9 @@ export default function PracticeScreen() {
             setView(
               sets.length > 0
                 ? { name: 'report', mode, start, order: view.order, showLatest: false }
-                : { name: 'choose', mode },
+                : mode === 'volume'
+                  ? { name: 'menu' }
+                  : { name: 'choose', mode },
             )
           }
         />
@@ -142,13 +171,17 @@ export default function PracticeScreen() {
           label={`Full session report card (${setCount})`}
           onPress={() => setView({ name: 'session', back: view })}
         />
-        <Card>
-          <Label>Go again</Label>
-          <ShiftButtons start={start} onChoose={(next) => sing(mode, next, view.order)} />
-          <ThemedText type="small" themeColor="textSecondary">
-            Moves the whole scale. One note is the next piano key. That set was {span(start)}.
-          </ThemedText>
-        </Card>
+        {mode === 'volume' ? (
+          <Button primary label="Go again" onPress={() => sing('volume', bestNote, view.order)} />
+        ) : (
+          <Card>
+            <Label>Go again</Label>
+            <ShiftButtons start={start} onChoose={(next) => sing(mode, next, view.order)} />
+            <ThemedText type="small" themeColor="textSecondary">
+              Moves the whole scale. One note is the next piano key. That set was {span(start)}.
+            </ThemedText>
+          </Card>
+        )}
         <Button label="Change practice mode" onPress={() => setView({ name: 'menu' })} />
       </Screen>
     );
@@ -158,7 +191,7 @@ export default function PracticeScreen() {
     const { mode } = view;
     return (
       <Screen
-        title={mode === 'step' ? 'Step mode' : 'Slide mode'}
+        title={TITLES[mode]}
         subtitle={MODES.find((each) => each.mode === mode)?.line}>
         {mode === 'slide' && (
           <Card>
@@ -231,16 +264,20 @@ export default function PracticeScreen() {
             key={each.mode}
             title={each.title}
             detail={each.line}
-            onPress={() => setView({ name: 'choose', mode: each.mode })}
+            onPress={() =>
+              each.mode === 'volume'
+                ? sing('volume', bestNote, order)
+                : setView({ name: 'choose', mode: each.mode })
+            }
           />
         ))}
-        <ListRow
-          disabled
-          title="Volume match"
-          detail="Sing your best note and match a loudness target, soft to loud."
-          note="Not built yet."
-        />
       </View>
+      <ThemedText type="small" themeColor="textSecondary">
+        Volume match starts on {noteName(bestNote)},{' '}
+        {bestMiss === Infinity
+          ? 'until you have matched a note this session.'
+          : 'the note you have matched most closely this session.'}
+      </ThemedText>
       {sets.length > 0 && (
         <Button
           label={`Session report card (${setCount})`}

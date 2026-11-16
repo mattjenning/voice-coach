@@ -10,9 +10,9 @@ Everything in the app is built from one move. The app plays a note for three sec
 
 | Mode | What it does | State |
 | --- | --- | --- |
-| Quick practice | Two kinds of practice across one octave, from one of six starting notes named after the voice types. **Step mode:** eight notes up a major scale, one attempt each. **Slide mode:** seven four-second glides, climbing, descending or random. Random mixes straight slides with ones that go up and come back down. The app plays each glide first while a ring rides along its path; on your turn the ring sets off again when you start singing and a ball shows your voice. A report card follows each set, with a percent score and a letter grade, and the full session report lists every finished set. Then the scale can stay, or move by one note or half an octave. | Step mode has run on a phone. Slide mode has not. Volume match is planned, not built. |
+| Quick practice | Three kinds of practice, each ending in a report card with a percent score and a letter grade. **Step mode:** eight notes up a major scale from one of six starting notes, one attempt each. **Slide mode:** seven glides, climbing, descending or random, at three difficulties. The app plays each glide first while a ring rides its path; on your turn a ball shows your voice against the ring. **Volume match:** the app learns your softest and loudest singing, then asks for five loudness targets between them. | Step and Slide have run on a phone. Volume match has not. |
 | Progression | Ten guided levels. Level 1 finds your home note, the note you sing when asked for an easy one. Every later level is built from it. Levels train pitch matching, steps, jumps, range and breath control. Progress and achievements are saved on the phone. | Built. Not yet run on a phone. |
-| Song mode | Master one song a phrase at a time, by call and response. | Design only. The screen explains the design. |
+| Song mode | Amazing Grace, a line at a time. The app plays a line, you sing it back, and it scores how much was on the notes and in time. Three clean passes master a line. Mastery is saved on the phone. | Built. Not yet run on a phone. |
 
 ## Run it
 
@@ -47,8 +47,10 @@ The check builds every note from C2 to C6 as four kinds of tone (pure, voice-lik
 | `src/components/report-card.tsx` | A report card for one set or a whole session |
 | `src/lib/exercise.ts` | The engine. An exercise is a list of steps; this is every way one can unfold. Pure logic. |
 | `src/lib/quick.ts` | The scale, the six starting notes, the shifts |
-| `src/lib/slide.ts` | Slide mode: the sets, and the sound of a glide worked out as numbers |
-| `src/hooks/slide-sounds.ts` | Saves a slide's sound on the phone and plays it |
+| `src/lib/slide.ts` | Slide mode: the sets, the difficulties, and the sound of a slide or phrase worked out as numbers |
+| `src/lib/song.ts` | Song mode: Amazing Grace written out as notes, and the rules of mastery |
+| `src/hooks/slide-sounds.ts` | Saves the sound of a slide or phrase on the phone and plays it |
+| `src/hooks/use-passes.ts` | Saves Song mode's clean passes on the phone |
 | `src/lib/progression.ts` | Progression: the levels, the pass marks, the achievements |
 | `src/lib/report.ts` | What a list of results adds up to |
 | `src/lib/pitch.ts` | Pitch detection (the YIN method) and smoothing. Pure maths. |
@@ -98,33 +100,38 @@ Matthew set the direction on 2026-11-16: dark with yellow over a light version a
 - **Reference tones are rich in overtones.** A phone speaker is silent below about 300 Hz, so a plain low note would not be heard.
 - **Slide sounds are made on the phone.** There are too many possible slides to ship a file for each, so the app works the sound out as numbers, saves it as a small file in the phone's throwaway storage, and plays that. Song mode will need the same trick to play phrases.
 - **A slide's clock starts when the singer does.** The score is the share of the slide sung within 50 cents of the moving pitch, so a slow start costs nothing but stopping early does.
+- **Slides and song lines are the same thing to the engine: a path.** A path is a pitch that moves over time. One piece of code plays it, draws it and scores it, which is why Song mode took little new code.
+- **Song mode is call and response.** The phone cannot play and listen at once, so the app sings a line and then the singer does. A line's clock starts when the singer starts.
+- **Loudness is measured against the singer's own range.** How loud a phone hears you depends on the phone and how far away it is, so Volume match first listens to your softest and loudest singing and sets its targets between them.
 - **Missed notes earn partial credit.** A matched note scores 100. A missed one gets up to 50 for how close the best attempt came (full marks on the note, nothing a semitone away) and up to 50 for how much of the hold was done in tune. The set's score is the average, graded on the school scale: A from 90, B from 80, C from 70, D from 60.
 - **"One note" is one semitone**, the next piano key. That is how singers walk a warm-up scale up and down.
 - **Round timings came from trying it** (Matthew, 2026-11-16): a 3 second tone, 3.5 seconds of listening, 2 seconds held.
 
 ## Proven on a phone
 
-On Matthew's iPhone, 2026-11-16: the microphone stream in Expo Go, the reference tone on every round, the start screen, and a full Step mode set with its report card.
+On Matthew's iPhone, 2026-11-16: the microphone stream in Expo Go, the reference tone on every round, the start screen, a full Step mode set with its report card, and Slide mode.
 
 ## Not yet proven
 
 These need a real iPhone and have not been tried:
 
-1. Slide mode. Nothing about it has run on a phone: making the sound, saving it, playing it, or scoring a real voice against it.
-2. Progression. It has not been tried on a phone.
-3. How accurate the detector is on a real voice. A real set scored 92% on a phone, but nobody has checked a reading against a tuner.
-4. That progress is still there after the app is closed and opened again.
-5. `npx expo lint` has never run. The linter would not install in the build environment.
+1. Volume match. Whether a phone's loudness readings are steady enough to hold a target has not been tried.
+2. Song mode. The tune is checked against itself, but nobody has sung along to it.
+3. Slide mode's medium and hard difficulties.
+4. Progression. It has not been tried on a phone.
+5. How accurate the detector is on a real voice. A real set scored 92% on a phone, but nobody has checked a reading against a tuner.
+6. That progress and mastery are still there after the app is closed and opened again.
+7. `npx expo lint` has never run. The linter would not install in the build environment.
 
 ## Before beta
 
 The app goes to beta testers when every line here is true. Today it is not.
 
 - [x] Step mode has run start to finish on a phone.
-- [ ] Slide mode has run start to finish on a phone.
+- [x] Slide mode has run start to finish on a phone.
 - [ ] Progression has run start to finish on a phone, and its progress survives closing the app.
-- [ ] Volume match is built, or hidden.
-- [ ] Song mode is hidden, or a tester is told plainly it is a plan.
+- [ ] Volume match has run start to finish on a phone.
+- [ ] Song mode has run start to finish on a phone, and its mastery survives closing the app.
 - [ ] A second person has tried it, ideally with a higher voice than Matthew's.
 - [ ] The app has its own icon. It still shows Expo's.
 - [ ] `npx expo lint` has run clean.
@@ -133,9 +140,9 @@ The app goes to beta testers when every line here is true. Today it is not.
 
 ## Roadmap
 
-1. **Prove this build on a phone.** The five items above.
-2. **Volume match.** Sing your best note and match a loudness target. It needs the microphone's loudness as well as its pitch, and a way to learn each singer's quiet and loud.
-3. **Song mode.** In order: score a sung phrase against a melody map, play a phrase as one sound, try the melody script on a real voice, then find a way to lift the voice out of a full song. The last one is not researched and decides which songs can be used.
-4. **More of Progression.** Slides across the bridge, loud and soft on one note, and short phrases from real songs. The slide step now exists, from Slide mode.
+1. **Prove this build on a phone.** The items above.
+2. **Beta.** The checklist above.
+3. **Your own song.** Song mode plays one built-in tune. Next: turn a song the singer owns into lines the same way. The melody script handles a voice on its own; lifting a voice out of a full song with instruments is not researched and decides which songs can be used.
+4. **More of Progression.** Slides across the bridge, loud and soft on one note, and lines from real songs. The pieces now exist in Quick practice and Song mode.
 
 Songs from streaming services cannot be analyzed, because their playback is protected. The first route is songs owned as files. Selling an app built on the melodies of commercial songs would likely need the rights cleared first; personal use does not.

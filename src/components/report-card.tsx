@@ -27,6 +27,9 @@ function Fact({ label, value }: { label: string; value: string }) {
 
 /** What went wrong on a missed note, in a few words. */
 function attempt(result: StepResult): string {
+  if (result.step.volume !== undefined) {
+    return result.heldMs > 0 ? 'in the band, not held' : 'not in the band';
+  }
   if (result.closestCents === null) return 'not heard';
   if (result.score !== undefined) return `${Math.round(result.closestCents)} cents off on average`;
   if (Math.abs(result.closestCents) <= HOLD.toleranceCents) return 'in tune, not held';
@@ -108,7 +111,7 @@ export function ReportCard({
           <Fact label="Matched" value={`${summary.matched} of ${summary.attempted}`} />
           <Fact
             label="Average miss"
-            value={miss === null ? 'nothing heard' : miss === 1 ? '1 cent' : `${miss} cents`}
+            value={miss === null ? 'none measured' : miss === 1 ? '1 cent' : `${miss} cents`}
           />
           <Fact
             label="Range"

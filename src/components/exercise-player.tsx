@@ -41,8 +41,8 @@ export function ExercisePlayer({
   onQuit: () => void;
 }) {
   const [run, dispatch] = useReducer(runReducer, steps, begin);
-  const { status, problem, playThenListen, stop } = usePitch((hz, atMs) =>
-    dispatch({ type: 'pitch', hz, atMs }),
+  const { status, problem, playThenListen, stop } = usePitch((hz, atMs, db) =>
+    dispatch({ type: 'pitch', hz, atMs, db }),
   );
   const { phase, turn, index } = run;
   const step = run.steps[index];

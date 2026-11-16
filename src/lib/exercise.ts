@@ -48,7 +48,61 @@ export type Step = {
   phrase?: PhraseNote[];
   /** What to call this step on screen and in a report, when its notes alone do not say. */
   name?: string;
+  /** Set for a loudness step: the singer is judged on how loud they sing, not on the note. */
+  volume?: Volume;
 };
+
+/**
+ * A loudness step. "quiet" and "loud" listen to the singer's softest and
+ * loudest singing, to learn their own range. "match" asks them to sing at a
+ * point in that range and hold it: 0 is their softest, 1 their loudest.
+ */
+export type Volume = { kind: 'quiet' } | { kind: 'loud' } | { kind: 'match'; target: number };
+
+/** Within this much of the target, as a share of the singer's range, counts as matched. */
+export const VOLUME_TOLERANCE = 0.15;
+/** A singer's loud and soft are treated as at least this many decibels apart. */
+const SMALLEST_RANGE_DB = 10;
+/** A range to use if the singer's own was never measured. */
+const USUAL_QUIET_DB = -45;
+const USUAL_LOUD_DB = -20;
+
+/**
+ * Volume match: learn the singer's soft and loud, then five targets between.
+ * The reference tone plays once, before the first step.
+ */
+export function volumeSteps(midi: number): Step[] {
+  const learn = (name: string, volume: Volume, tone: number | null): Step => ({
+    midi: tone,
+    holdMs: 0,
+    listenMs: 3500,
+    volume,
+    name,
+  });
+  const match = (name: string, target: number): Step => ({
+    midi: null,
+    holdMs: 2000,
+    listenMs: 5000,
+    volume: { kind: 'match', target },
+    name,
+  });
+  return [
+    learn('As soft as you can', { kind: 'quiet' }, midi),
+    learn('Loud, but comfortable', { kind: 'loud' }, null),
+    match('Soft', 0.25),
+    match('Loud', 0.75),
+    match('Medium', 0.5),
+    match('Very loud', 0.95),
+    match('Very soft', 0.05),
+  ];
+}
+
+/** Where a loudness in decibels sits in a singer's range: 0 is their softest, 1 their loudest. */
+export function loudnessShare(db: number, quietDb: number | null, loudDb: number | null): number {
+  const quiet = quietDb ?? USUAL_QUIET_DB;
+  const loud = Math.max(loudDb ?? USUAL_LOUD_DB, quiet + SMALLEST_RANGE_DB);
+  return (db - quiet) / (loud - quiet);
+}
 
 /** One note of a phrase: which note, and how long it lasts. */
 export type PhraseNote = { midi: number; ms: number };
@@ -215,6 +269,14 @@ export type Run = {
   closestHz: number | null;
   /** For an "any steady note" step: the note the singer is settling on. */
   settledMidi: number | null;
+  /** For a loudness step: how loud the singer is now, as a share of their range, and the readings so far. */
+  loudness: number | null;
+  levels: number[];
+  /** The nearest the singer has come to the loudness target this step. */
+  volumeGap: number | null;
+  /** The singer's softest and loudest singing, in decibels, once measured. Kept for the whole run. */
+  quietDb: number | null;
+  loudDb: number | null;
   /** For a slide: when the singer started, and how the readings since have gone. */
   slideStartedAt: number | null;
   slideHeard: number;
@@ -230,7 +292,7 @@ export type RunEvent =
   | { type: 'start'; steps: Step[] }
   /** The tone has finished and the microphone is on. */
   | { type: 'listen'; atMs: number }
-  | { type: 'pitch'; hz: number | null; atMs: number }
+  | { type: 'pitch'; hz: number | null; atMs: number; db?: number }
   /** A clock tick, in case no sound arrives to move time along. */
   | { type: 'tick'; atMs: number }
   | { type: 'stop' };
@@ -251,6 +313,9 @@ const STEP_START = {
   slideErrorSum: 0,
   slideVoiced: 0,
   trace: [] as { tMs: number; midi: number }[],
+  loudness: null,
+  levels: [] as number[],
+  volumeGap: null,
 };
 
 export const NO_RUN: Run = {
@@ -259,6 +324,8 @@ export const NO_RUN: Run = {
   phase: 'ready',
   turn: 0,
   results: [],
+  quietDb: null,
+  loudDb: null,
   ...STEP_START,
 };
 
@@ -290,6 +357,7 @@ function advance(run: Run, result: StepResult): Run {
 /** Close the note in play. */
 function endStep(run: Run, matched: boolean): Run {
   const step = run.steps[run.index];
+  if (step.volume !== undefined) return endVolume(run, step, step.volume);
   const path = stepPath(step);
   if (path !== null) return endPath(run, step, path);
   const sungHz = run.closestHz;
@@ -301,6 +369,72 @@ function endStep(run: Run, matched: boolean): Run {
       step.midi === null ? run.settledMidi : sungHz === null ? null : Math.round(hzToMidi(sungHz)),
     heldMs: Math.min(run.longestHeldMs, step.holdMs),
   });
+}
+
+/** Close the loudness step in play. */
+function endVolume(run: Run, step: Step, volume: Volume): Run {
+  if (volume.kind !== 'match') {
+    // Learning the singer's range: take the middle reading, and remember it for the run.
+    const sorted = [...run.levels].sort((a, b) => a - b);
+    const heard = sorted.length >= 5;
+    const middle = heard ? sorted[Math.floor(sorted.length / 2)] : null;
+    const next = advance(run, {
+      step,
+      matched: heard,
+      closestCents: null,
+      sungMidi: null,
+      heldMs: 0,
+      score: heard ? 100 : 0,
+    });
+    return volume.kind === 'quiet'
+      ? { ...next, quietDb: middle ?? run.quietDb }
+      : { ...next, loudDb: middle ?? run.loudDb };
+  }
+  const matched = run.hold.done;
+  const closeness = run.volumeGap === null ? 0 : Math.max(0, 1 - run.volumeGap / 0.5);
+  const held = Math.min(1, run.longestHeldMs / step.holdMs);
+  return advance(run, {
+    step,
+    matched,
+    closestCents: null,
+    sungMidi: null,
+    heldMs: Math.min(run.longestHeldMs, step.holdMs),
+    score: matched ? 100 : Math.min(99, Math.round(50 * closeness + 50 * held)),
+  });
+}
+
+/** Score one reading against a loudness step. Silence is neither soft nor loud: it does not count. */
+function hearVolume(
+  run: Run,
+  step: Step,
+  volume: Volume,
+  hz: number | null,
+  db: number | undefined,
+  atMs: number,
+): Run {
+  const voiced = hz !== null && db !== undefined;
+  if (volume.kind !== 'match') {
+    return {
+      ...run,
+      hz,
+      levels: voiced ? [...run.levels, db] : run.levels,
+      loudness: voiced ? loudnessShare(db, run.quietDb, run.loudDb) : null,
+      clockMs: atMs,
+    };
+  }
+  const loudness = voiced ? loudnessShare(db, run.quietDb, run.loudDb) : null;
+  const gap = loudness === null ? null : Math.abs(loudness - volume.target);
+  const inRange = gap !== null && gap <= VOLUME_TOLERANCE;
+  const hold = advanceHold(run.hold, inRange, atMs, step.holdMs);
+  return {
+    ...run,
+    hz,
+    loudness,
+    hold,
+    longestHeldMs: Math.max(run.longestHeldMs, hold.heldMs),
+    volumeGap: gap !== null && (run.volumeGap === null || gap < run.volumeGap) ? gap : run.volumeGap,
+    clockMs: atMs,
+  };
 }
 
 /**
@@ -429,6 +563,11 @@ export function runReducer(run: Run, event: RunEvent): Run {
     case 'pitch': {
       if (run.phase !== 'listening' || run.deadlineMs === null) return run;
       const step = run.steps[run.index];
+      if (step.volume !== undefined) {
+        const heard = hearVolume(run, step, step.volume, event.hz, event.db, event.atMs);
+        const finished = step.volume.kind === 'match' && heard.hold.done;
+        return finished || event.atMs >= run.deadlineMs ? endVolume(heard, step, step.volume) : heard;
+      }
       const path = stepPath(step);
       if (path !== null) {
         const heard = hearPath(run, path, event.hz, event.atMs);

@@ -15,7 +15,7 @@ const MODES: Mode[] = [
   {
     href: '/quick',
     title: 'Quick practice',
-    line: 'Steps and slides across one octave, then a report card.',
+    line: 'Steps, slides and volume, each with a report card.',
   },
   {
     href: '/progression',

@@ -4,7 +4,15 @@ import { StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { SLIDE_TOLERANCE_CENTS, stepPath, timeLeftMs, type Path, type Run } from '@/lib/exercise';
+import {
+  SLIDE_TOLERANCE_CENTS,
+  VOLUME_TOLERANCE,
+  stepPath,
+  timeLeftMs,
+  type Path,
+  type Run,
+  type Volume,
+} from '@/lib/exercise';
 import { HOLD, formatOctaves, type TargetReading } from '@/lib/hold';
 import { formatCents, nearestNote } from '@/lib/notes';
 import { stepLabel } from '@/lib/slide';
@@ -70,6 +78,64 @@ function NoteField({ reading, flood }: { reading: TargetReading | null; flood: n
       </ThemedText>
       <ThemedText type="small" style={[styles.edge, styles.edgeBottom, { color: theme.onTune }]}>
         flat
+      </ThemedText>
+    </View>
+  );
+}
+
+/**
+ * The field for a loudness step. Loud is up, soft is down. The band is the
+ * loudness to hit, and the ball is how loud you are now. While you are in
+ * the band, yellow floods in from the left, as it does for a held note.
+ */
+function VolumeField({
+  volume,
+  loudness,
+  flood,
+}: {
+  volume: Volume;
+  loudness: number | null;
+  flood: number;
+}) {
+  const theme = useTheme();
+  // The field shows a little beyond the singer's own softest and loudest.
+  const up = (share: number) => percent((share + 0.15) / 1.3);
+  const inRange =
+    volume.kind === 'match' &&
+    loudness !== null &&
+    Math.abs(loudness - volume.target) <= VOLUME_TOLERANCE;
+  return (
+    <View style={[styles.field, { backgroundColor: theme.field }]}>
+      <View style={[styles.flood, { backgroundColor: theme.tune, width: percent(flood) }]} />
+      {volume.kind === 'match' && (
+        <View
+          style={[
+            styles.band,
+            {
+              borderColor: theme.onTune,
+              bottom: up(volume.target - VOLUME_TOLERANCE),
+              height: percent((2 * VOLUME_TOLERANCE) / 1.3),
+            },
+          ]}
+        />
+      )}
+      {loudness !== null && (
+        <View
+          style={[
+            styles.mark,
+            {
+              bottom: up(loudness),
+              backgroundColor: inRange ? theme.onTune : theme.voice,
+              borderColor: theme.onTune,
+            },
+          ]}
+        />
+      )}
+      <ThemedText type="small" style={[styles.edge, styles.edgeTop, { color: theme.onTune }]}>
+        loud
+      </ThemedText>
+      <ThemedText type="small" style={[styles.edge, styles.edgeBottom, { color: theme.onTune }]}>
+        soft
       </ThemedText>
     </View>
   );
@@ -225,6 +291,7 @@ export function RunView({ run }: { run: Run }) {
   const path = stepPath(step);
   const slide = path !== null;
   const phrase = step.phrase !== undefined;
+  const volume = step.volume;
   const holdShare = step.holdMs <= 0 ? 0 : Math.min(1, hold.heldMs / step.holdMs);
   const onLine = run.slideHeard === 0 ? 0 : Math.round((100 * run.slideOnLine) / run.slideHeard);
 
@@ -237,6 +304,17 @@ export function RunView({ run }: { run: Run }) {
     }
   } else if (anyNote) {
     detail = 'Get ready.';
+  }
+
+  if (volume !== undefined) {
+    if (phase !== 'listening') detail = 'Listen to the note. Any note will do.';
+    else if (volume.kind === 'quiet') detail = 'Sing as softly as you can, and keep going.';
+    else if (volume.kind === 'loud') detail = 'Sing loud, but stay comfortable.';
+    else if (run.loudness === null) detail = 'Sing, and bring the ball into the band.';
+    else {
+      const gap = run.loudness - volume.target;
+      detail = Math.abs(gap) <= VOLUME_TOLERANCE ? 'Hold it there.' : gap > 0 ? 'Softer.' : 'Louder.';
+    }
   }
 
   let count = ' ';
@@ -252,13 +330,21 @@ export function RunView({ run }: { run: Run }) {
       <View style={styles.head}>
         <View style={styles.headText}>
           <ThemedText type="small" themeColor="textSecondary">
-            {anyNote ? 'Your note' : phrase ? 'Sing the line' : slide ? 'Follow the slide' : 'Match the note'}, {run.index + 1} of{' '}
+            {volume !== undefined
+              ? 'Match the volume'
+              : anyNote
+                ? 'Your note'
+                : phrase
+                  ? 'Sing the line'
+                  : slide
+                    ? 'Follow the slide'
+                    : 'Match the note'}, {run.index + 1} of{' '}
             {run.steps.length}
           </ThemedText>
           <ThemedText
             numberOfLines={1}
             adjustsFontSizeToFit
-            style={slide ? styles.slideTarget : styles.target}>
+            style={slide || volume !== undefined ? styles.slideTarget : styles.target}>
             {stepLabel(step)}
           </ThemedText>
         </View>
@@ -276,7 +362,9 @@ export function RunView({ run }: { run: Run }) {
         </View>
       </View>
 
-      {path !== null ? (
+      {volume !== undefined ? (
+        <VolumeField volume={volume} loudness={run.loudness} flood={holdShare} />
+      ) : path !== null ? (
         <PathField run={run} path={path} />
       ) : (
         <NoteField reading={reading} flood={holdShare} />
@@ -286,9 +374,11 @@ export function RunView({ run }: { run: Run }) {
         <ThemedText style={styles.detail}>{detail}</ThemedText>
         <View style={styles.between}>
           <ThemedText type="smallBold">
-            {slide
+            {volume !== undefined && volume.kind !== 'match'
+              ? 'Learning your range'
+              : slide
               ? `On the line ${onLine}%`
-              : `Held in tune ${seconds(Math.min(hold.heldMs, step.holdMs), 1)} of ${wholeSeconds(step.holdMs)} seconds`}
+              : `${volume !== undefined ? 'Held in the band' : 'Held in tune'} ${seconds(Math.min(hold.heldMs, step.holdMs), 1)} of ${wholeSeconds(step.holdMs)} seconds`}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary" style={styles.numbers}>
             {count}
@@ -348,6 +438,13 @@ const styles = StyleSheet.create({
     right: 0,
     height: 1,
     opacity: 0.35,
+  },
+  band: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    borderTopWidth: 3,
+    borderBottomWidth: 3,
   },
   mark: {
     position: 'absolute',

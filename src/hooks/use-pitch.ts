@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { Framer, firstChannel, thinningFactor } from '@/lib/frames';
-import { PitchSmoother, detectPitch } from '@/lib/pitch';
+import { PitchSmoother, detectPitch, level } from '@/lib/pitch';
 
 export type Listening =
   | 'off'
@@ -135,10 +135,12 @@ function stopStream(stream: AudioStream | null): void {
  * Listens to the microphone and reports the pitch being sung.
  *
  * `onPitch` is called about ten times a second while listening, with the
- * pitch in hertz or null for silence. The sound is analyzed on the phone,
+ * pitch in hertz or null for silence, and how loud the sound was. The sound is analyzed on the phone,
  * a slice at a time, and thrown away. Nothing is recorded or sent anywhere.
  */
-export function usePitch(onPitch: (hz: number | null, atMs: number) => void): PitchListener {
+export function usePitch(
+  onPitch: (hz: number | null, atMs: number, db: number) => void,
+): PitchListener {
   const [status, setStatus] = useState<Listening>('off');
   const [problem, setProblem] = useState<string | null>(null);
   const framer = useRef<Framer | null>(null);
@@ -161,7 +163,9 @@ export function usePitch(onPitch: (hz: number | null, atMs: number) => void): Pi
       const pitch = detectPitch(frame, rate);
       hz = smoother.current.push(pitch ? pitch.hz : null);
     }
-    onPitch(hz, now);
+    // Loudness of this buffer in decibels: 0 is as loud as the microphone can hear,
+    // and every 6 below that is half as loud.
+    onPitch(hz, now, 20 * Math.log10(Math.max(level(samples), 1e-6)));
   };
 
   const { stream } = useAudioStream({ channels: 1, encoding: 'float32', onBuffer });
