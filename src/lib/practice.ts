@@ -23,7 +23,7 @@ export const HIGHEST_TARGET = 72; // C5
 export const FIRST_TARGET = 48; // C3
 
 /** How long the app listens after the tone. */
-export const LISTEN_MS = 5000;
+export const LISTEN_MS = 3500;
 
 export type Phase =
   /** Nothing is happening. Waiting for a tap. */

@@ -18,8 +18,8 @@ import { writeWav } from '../src/lib/wav.ts';
 
 const LOWEST = LOWEST_TARGET;
 const HIGHEST = HIGHEST_TARGET;
-const RATE = 16_000;
-const SECONDS = 1.2;
+const RATE = 12_000;
+const SECONDS = 3;
 const OVERTONES = [1, 0.71, 0.58, 0.5, 0.45, 0.41, 0.38, 0.35];
 /** The loudest sample in every tone, where 1 is the most a file can hold. */
 const PEAK = 0.9;

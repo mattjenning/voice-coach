@@ -2,7 +2,7 @@
 
 A singing coach for the phone. The aim: pick one song that challenges you, work on it every day, and get told exactly where your pitch is off.
 
-This first version does the smallest useful piece of that. One tap plays a note, then the app listens for five seconds while you sing it back and shows how close you are. Hold the note in tune for two seconds to match it.
+This first version does the smallest useful piece of that. One tap plays a note for three seconds, then the app listens for 3.5 seconds while you sing it back and shows how close you are. Hold the note in tune for two seconds to match it.
 
 ![The practice screen after matching a note](docs/matched.png)
 
@@ -63,15 +63,16 @@ The check for this sings a made-up six-note phrase, with vibrato, a repeated not
 - **Pitch detection is written here, not imported.** It is about a hundred lines, it is the heart of the app, and owning it means it can be tuned for singing.
 - **Any octave counts.** A low voice can practise a note written for a high one.
 - **The voice stays on the phone.** Sound is analyzed a slice at a time and thrown away. Nothing is recorded or sent anywhere.
-- **One tap runs a whole round.** The tone plays, then the microphone listens for five seconds, then it turns itself off. The first build had separate buttons for hearing and listening, and going back and forth was awkward.
+- **One tap runs a whole round.** The tone plays for three seconds, then the microphone listens for 3.5 seconds, then it turns itself off. Matthew set those times from trying it. The first build had separate buttons for hearing and listening, and going back and forth was awkward.
 - **The tone and the microphone never overlap.** On an iPhone, `expo-audio`'s microphone stream puts the phone in record-only mode, and nothing can play until the stream stops. Pausing it also keeps the app from scoring its own speaker.
+- **The speaker is reset before every tone.** The microphone stream leaves the phone in a quiet "measurement" setting, and a sound that has played once sits at its end. Both made the second tone silent on a real iPhone.
 - **Reference tones are rich in overtones.** A phone speaker is silent below about 300 Hz, so a plain low note would not be heard.
 
 ## Not yet proven
 
 These need a real iPhone and have not been tried:
 
-1. The one-tap round. The tone and the microphone were each confirmed on a real iPhone on 2026-11-16, with separate buttons. The combined round has not been tried.
+1. That the tone plays on every round. The one-tap round ran on a real iPhone on 2026-11-16, but the tone was silent after the first round. The fix has not been confirmed.
 2. How accurate the detector is on a real voice. It shows a note for one, but nobody has checked the note is right.
 3. `npx expo lint` has never run. The linter would not install in the build environment.
 

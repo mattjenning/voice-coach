@@ -148,6 +148,8 @@ function statusLine(status: Listening, problem: string | null): string | null {
 }
 
 const seconds = (ms: number, digits: number) => (ms / 1000).toFixed(digits);
+/** "2" for 2000, "3.5" for 3500. */
+const wholeSeconds = (ms: number) => seconds(ms, Number.isInteger(ms / 1000) ? 0 : 1);
 
 /** "33 cents sharp, one octave below the target" */
 function howClose(reading: TargetReading): string {
@@ -167,11 +169,11 @@ function describe(practice: Practice, reading: TargetReading | null): string {
       return 'Time is up. No note was heard. Try singing louder, or closer to the phone.';
     }
     if (closest.inTune) {
-      return `Time is up. You reached the note but did not hold it for ${seconds(HOLD.goalMs, 0)} seconds.`;
+      return `Time is up. You reached the note but did not hold it for ${wholeSeconds(HOLD.goalMs)} seconds.`;
     }
     return `Time is up. Your closest was ${howClose(closest)}.`;
   }
-  return `Tap the button to hear the note. Then you have ${seconds(LISTEN_MS, 0)} seconds to sing it back.`;
+  return `Tap the button to hear the note. Then you have ${wholeSeconds(LISTEN_MS)} seconds to sing it back.`;
 }
 
 /** What the singer is doing right now, in words and on the meter. */
@@ -184,13 +186,8 @@ function Readout({ practice }: { practice: Practice }) {
   const shown = reading ?? (result === 'missed' ? closest : null);
   const progress = Math.min(1, hold.heldMs / HOLD.goalMs);
 
-  let footnote = ' ';
-  if (phase === 'listening') {
-    const held = seconds(Math.min(hold.heldMs, HOLD.goalMs), 1);
-    footnote = `Held in tune: ${held} of ${seconds(HOLD.goalMs, 0)} seconds · ${seconds(timeLeftMs(practice), 1)} seconds left`;
-  } else if (result === 'matched') {
-    footnote = `You held it in tune for ${seconds(HOLD.goalMs, 0)} seconds.`;
-  }
+  const held = seconds(Math.min(hold.heldMs, HOLD.goalMs), 1);
+  const goal = wholeSeconds(HOLD.goalMs);
 
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
@@ -204,17 +201,26 @@ function Readout({ practice }: { practice: Practice }) {
       </ThemedText>
       <ThemedText style={styles.centered}>{describe(practice, reading)}</ThemedText>
       <Meter reading={shown} />
-      <View
-        accessibilityRole="progressbar"
-        accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
-        style={[styles.holdTrack, { backgroundColor: theme.backgroundSelected }]}>
+      <View style={styles.holdBlock}>
+        <View style={styles.holdHeading}>
+          <ThemedText type="smallBold">Held in tune</ThemedText>
+          <ThemedText type="smallBold" style={styles.numbers}>
+            {held} of {goal} seconds
+          </ThemedText>
+        </View>
         <View
-          style={[styles.holdFill, { backgroundColor: theme.good, width: `${progress * 100}%` }]}
-        />
+          accessibilityRole="progressbar"
+          accessibilityLabel="Held in tune"
+          accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
+          style={[styles.holdTrack, { backgroundColor: theme.backgroundSelected }]}>
+          <View
+            style={[styles.holdFill, { backgroundColor: theme.good, width: `${progress * 100}%` }]}
+          />
+        </View>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.numbers}>
+          {phase === 'listening' ? `${seconds(timeLeftMs(practice), 1)} seconds left` : ' '}
+        </ThemedText>
       </View>
-      <ThemedText type="small" themeColor="textSecondary" style={styles.centered}>
-        {footnote}
-      </ThemedText>
     </ThemedView>
   );
 }
@@ -382,9 +388,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: Spacing.one,
   },
+  holdBlock: {
+    gap: Spacing.one,
+  },
+  holdHeading: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  numbers: {
+    fontVariant: ['tabular-nums'],
+  },
   holdTrack: {
-    height: Spacing.two,
-    borderRadius: Spacing.one,
+    height: Spacing.four,
+    borderRadius: Spacing.two,
     overflow: 'hidden',
   },
   holdFill: {

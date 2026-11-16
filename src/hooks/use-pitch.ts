@@ -45,15 +45,23 @@ export type PitchListener = {
 };
 
 /** If a sound never reports that it ended, stop waiting after this long. */
-const LONGEST_SOUND_MS = 3000;
+const LONGEST_SOUND_MS = 5000;
 
 /**
- * Puts the phone's sound system in playing mode: sound comes out of the
- * speaker, and plays even when the silent switch is on.
+ * Puts the phone's sound system back in normal playing mode: sound comes out
+ * of the speaker at full volume, and plays even when the silent switch is on.
+ *
+ * The microphone stream leaves the phone in a "measurement" setting, in which
+ * the speaker is very quiet. Asking for 'doNotMix' is what makes expo-audio
+ * reset that setting; with the default it is left as the stream set it.
  */
 async function switchToSpeaker(): Promise<void> {
   try {
-    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      allowsRecording: false,
+      interruptionMode: 'doNotMix',
+    });
   } catch {
     // If the mode cannot be set, still try to play.
   }
@@ -77,14 +85,21 @@ function playToEnd(player: AudioPlayer, done: () => void): () => void {
   };
   const begin = () => {
     started = true;
-    startedAt = Date.now();
-    player.seekTo(0);
-    player.play();
+    // Wait for the rewind to finish before playing. A sound that has already
+    // played once sits at its end, and playing from there is silent.
+    player
+      .seekTo(0)
+      .catch(() => {})
+      .then(() => {
+        if (finished) return;
+        startedAt = Date.now();
+        player.play();
+      });
   };
   const subscription = player.addListener('playbackStatusUpdate', (status) => {
     if (!started && status.isLoaded) begin();
     // Ignore an "ended" left over from the last time this sound played.
-    else if (started && status.didJustFinish && Date.now() - startedAt > 300) finish();
+    else if (startedAt > 0 && status.didJustFinish && Date.now() - startedAt > 300) finish();
   });
   const timer = setTimeout(finish, LONGEST_SOUND_MS);
   if (player.isLoaded) begin();
