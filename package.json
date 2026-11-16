@@ -40,7 +40,8 @@
     "lint": "expo lint",
     "check": "node scripts/check.mts",
     "typecheck": "tsc --noEmit",
-    "tones": "node scripts/make-tones.mts"
+    "tones": "node scripts/make-tones.mts",
+    "melody": "node scripts/melody.mts"
   },
   "private": true
 }

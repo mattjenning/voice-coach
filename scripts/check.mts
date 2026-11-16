@@ -13,6 +13,7 @@ import {
   formatOctaves,
   type HoldState,
 } from '../src/lib/hold.ts';
+import { findNotes, mapMelody, steady, trackPitch, type MelodyNote } from '../src/lib/melody.ts';
 import {
   centsBetween,
   formatCents,
@@ -31,6 +32,7 @@ import {
   practiceReducer,
   type Practice,
 } from '../src/lib/practice.ts';
+import { readWav, writeWav } from '../src/lib/wav.ts';
 
 /** A repeatable stand-in for Math.random, so a failing check fails every time. */
 function seeded(seed: number): () => number {
@@ -266,6 +268,125 @@ assert.equal(half.hold.heldMs, 800);
 assert.equal(practiceReducer(half, { type: 'quiet' }).hold.heldMs, 0);
 assert.equal(practiceReducer(half, { type: 'again' }).hold.heldMs, 0);
 assert.equal(practiceReducer(half, { type: 'pitch', hz: null, atMs: 5000 }).hold.heldMs, 0);
+
+// --- Sound files -----------------------------------------------------------
+
+{
+  const original = tone(220, 16_000, 1600, VOICE);
+  const file = writeWav(original, 16_000);
+  const back = readWav(file.buffer as ArrayBuffer);
+  assert.equal(back.sampleRate, 16_000);
+  assert.equal(back.samples.length, original.length);
+  for (let i = 0; i < original.length; i += 97) {
+    assert.ok(Math.abs(back.samples[i] - original[i]) < 1 / 16_000, 'a saved sound reads back the same');
+  }
+  assert.throws(() => readWav(new Uint8Array([1, 2, 3, 4]).buffer), /Not a WAV file/);
+
+  // A stereo file in 32-bit floating point, with an extra block before the
+  // sound, as recording apps write them. Left is 0.5 and right is -0.1.
+  const stereo = new DataView(new ArrayBuffer(12 + 24 + 12 + 8 + 16));
+  const put = (at: number, value: string) =>
+    [...value].forEach((letter, i) => stereo.setUint8(at + i, letter.charCodeAt(0)));
+  put(0, 'RIFF');
+  put(8, 'WAVEfmt ');
+  stereo.setUint32(16, 16, true);
+  stereo.setUint16(20, 3, true); // floating point
+  stereo.setUint16(22, 2, true); // two channels
+  stereo.setUint32(24, 44_100, true);
+  stereo.setUint16(34, 32, true);
+  put(36, 'LIST');
+  stereo.setUint32(40, 4, true);
+  put(48, 'data');
+  stereo.setUint32(52, 16, true);
+  [0.5, -0.1, 0.5, -0.1].forEach((value, i) => stereo.setFloat32(56 + i * 4, value, true));
+  const mixed = readWav(stereo.buffer);
+  assert.equal(mixed.sampleRate, 44_100);
+  assert.equal(mixed.samples.length, 2);
+  assert.ok(Math.abs(mixed.samples[0] - 0.2) < 1e-6, 'stereo is mixed down to one channel');
+}
+
+// --- Melody map ------------------------------------------------------------
+
+/**
+ * A made-up sung phrase at phone quality. Each note can wobble like a
+ * singer's vibrato. Between notes there is silence, or none at all.
+ */
+function sing(
+  notes: { midi: number; startMs: number; endMs: number; vibratoCents?: number }[],
+  totalMs: number,
+  sampleRate: number,
+): Float32Array {
+  const out = new Float32Array(Math.round((totalMs / 1000) * sampleRate));
+  const random = seeded(42);
+  for (const note of notes) {
+    const from = Math.round((note.startMs / 1000) * sampleRate);
+    const to = Math.round((note.endMs / 1000) * sampleRate);
+    const fade = Math.round(0.01 * sampleRate);
+    let phase = 0;
+    for (let i = from; i < to; i++) {
+      const seconds = (i - from) / sampleRate;
+      const wobble = (note.vibratoCents ?? 0) * Math.sin(2 * Math.PI * 5.5 * seconds);
+      const hz = midiToHz(note.midi) * 2 ** (wobble / 1200);
+      phase += (2 * Math.PI * hz) / sampleRate;
+      let sample = 0;
+      for (let k = 0; k < VOICE.length; k++) sample += VOICE[k] * Math.sin(phase * (k + 1));
+      const edge = Math.min(1, (i - from) / fade, (to - i) / fade);
+      out[i] = 0.2 * sample * edge;
+    }
+  }
+  for (let i = 0; i < out.length; i++) out[i] += 0.005 * (random() * 2 - 1);
+  return out;
+}
+
+{
+  const phrase = [
+    { midi: 60, startMs: 200, endMs: 600 },
+    { midi: 62, startMs: 600, endMs: 1000 }, // no gap: sung straight on from the last
+    { midi: 64, startMs: 1100, endMs: 1900, vibratoCents: 45 }, // a long, wobbling note
+    { midi: 67, startMs: 2300, endMs: 2600 },
+    { midi: 67, startMs: 2750, endMs: 3050 }, // the same note sung twice
+    { midi: 55, startMs: 3200, endMs: 3350 }, // a short low note
+  ];
+  const sung = sing(phrase, 3600, 48_000);
+  const map = mapMelody(sung, 48_000, 'check');
+
+  assert.equal(map.version, 1);
+  assert.equal(map.durationMs, 3600);
+  assert.deepEqual(
+    map.notes.map((note: MelodyNote) => noteName(note.midi)),
+    phrase.map((note) => noteName(note.midi)),
+    'finds every note, in order, and nothing extra',
+  );
+  let worstMs = 0;
+  map.notes.forEach((note: MelodyNote, i: number) => {
+    worstMs = Math.max(
+      worstMs,
+      Math.abs(note.startMs - phrase[i].startMs),
+      Math.abs(note.endMs - phrase[i].endMs),
+    );
+  });
+  assert.ok(worstMs <= 70, `note edges are within 70 ms (worst was ${worstMs} ms)`);
+
+  // Silence gives no notes. So does a click too short to be a note.
+  assert.deepEqual(mapMelody(new Float32Array(48_000), 48_000, 'silence').notes, []);
+  const blip = sing([{ midi: 60, startMs: 500, endMs: 530 }], 1000, 48_000);
+  assert.deepEqual(mapMelody(blip, 48_000, 'blip').notes, []);
+
+  // One wrong reading in a steady run is thrown away.
+  const run = [220, 220, 440, 220, 220].map((hz, i) => ({ atMs: i * 32, hz }));
+  assert.deepEqual(steady(run).map((point) => point.hz), [220, 220, 220, 220, 220]);
+
+  // A one-step dropout does not split a note; a long silence does.
+  const step = 32;
+  const points = [220, 220, 220, null, 220, 220, 220, null, null, null, null, 220, 220, 220, 220].map(
+    (hz, i) => ({ atMs: i * step, hz }),
+  );
+  const split = findNotes({ points, stepMs: step });
+  assert.equal(split.length, 2);
+  assert.equal(split[0].endMs - split[0].startMs, 7 * step);
+
+  assert.ok(trackPitch(sung, 48_000).stepMs === 32);
+}
 
 console.log(
   `All checks passed. 49 notes, C2 to C6, four kinds of tone each. ` +

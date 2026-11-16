@@ -13,6 +13,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 
 import { midiToHz, noteName } from '../src/lib/notes.ts';
 import { HIGHEST_TARGET, LOWEST_TARGET } from '../src/lib/practice.ts';
+import { writeWav } from '../src/lib/wav.ts';
 
 const LOWEST = LOWEST_TARGET;
 const HIGHEST = HIGHEST_TARGET;
@@ -21,27 +22,6 @@ const SECONDS = 1.2;
 const OVERTONES = [1, 0.5, 0.3, 0.15];
 const FADE_IN = 0.03;
 const FADE_OUT = 0.3;
-
-function wav(samples: Float32Array): Buffer {
-  const data = Buffer.alloc(samples.length * 2);
-  for (let i = 0; i < samples.length; i++) {
-    data.writeInt16LE(Math.round(Math.max(-1, Math.min(1, samples[i])) * 32767), i * 2);
-  }
-  const header = Buffer.alloc(44);
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + data.length, 4);
-  header.write('WAVEfmt ', 8);
-  header.writeUInt32LE(16, 16); // size of the format block
-  header.writeUInt16LE(1, 20); // plain PCM
-  header.writeUInt16LE(1, 22); // one channel
-  header.writeUInt32LE(RATE, 24);
-  header.writeUInt32LE(RATE * 2, 28); // bytes a second
-  header.writeUInt16LE(2, 32); // bytes per sample
-  header.writeUInt16LE(16, 34); // bits per sample
-  header.write('data', 36);
-  header.writeUInt32LE(data.length, 40);
-  return Buffer.concat([header, data]);
-}
 
 function tone(hz: number): Float32Array {
   const count = Math.round(RATE * SECONDS);
@@ -64,7 +44,7 @@ mkdirSync('src/data', { recursive: true });
 
 const lines: string[] = [];
 for (let midi = LOWEST; midi <= HIGHEST; midi++) {
-  writeFileSync(`assets/tones/${midi}.wav`, wav(tone(midiToHz(midi))));
+  writeFileSync(`assets/tones/${midi}.wav`, writeWav(tone(midiToHz(midi)), RATE));
   lines.push(`  ${midi}: require('../../assets/tones/${midi}.wav'), // ${noteName(midi)}`);
 }
 
