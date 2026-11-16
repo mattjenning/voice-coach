@@ -33,11 +33,13 @@ export const Colors = {
     /** The pitch field at rest. Pale in both modes, so its ink marks always show. */
     field: '#DBDFF7',
     /**
-     * Things you press: buttons and the link back. Turquoise
-     * Green from Sanzo Wada's A Dictionary of Color Combinations. It is a cool
-     * color, close to the indigo, so it never competes with the yellow.
+     * Things you press: buttons, the link back, and any row while your finger
+     * is on it. It began as Turquoise Green (#B5DECC) from Sanzo Wada's A
+     * Dictionary of Color Combinations; Matthew asked for it a little paler.
+     * It is a cool color, close to the indigo, so it never competes with the
+     * yellow.
      */
-    accent: '#B5DECC',
+    accent: '#CBE8DB',
     /** Text on the turquoise. Indigo in both modes. */
     onAccent: '#1C1660',
     /** In tune. A fill, never a text color: yellow on paper is too faint to read. */
@@ -56,7 +58,7 @@ export const Colors = {
     backgroundSelected: '#261E74',
     textSecondary: '#A9A8E0',
     field: '#DBDFF7',
-    accent: '#B5DECC',
+    accent: '#CBE8DB',
     onAccent: '#1C1660',
     tune: '#FFCB1F',
     onTune: '#1C1660',

@@ -43,18 +43,23 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        { borderColor: theme.accent, backgroundColor: primary ? theme.accent : 'transparent' },
+        {
+          borderColor: theme.accent,
+          backgroundColor: primary || pressed ? theme.accent : 'transparent',
+        },
         compact && styles.compact,
-        pressed && (primary ? styles.pressed : { backgroundColor: theme.backgroundSelected }),
+        pressed && primary && styles.pressed,
         disabled && styles.disabled,
       ]}>
-      <ThemedText
-        style={[
-          compact ? styles.compactLabel : styles.buttonLabel,
-          { color: primary ? theme.onAccent : theme.accent },
-        ]}>
-        {label}
-      </ThemedText>
+      {({ pressed }) => (
+        <ThemedText
+          style={[
+            compact ? styles.compactLabel : styles.buttonLabel,
+            { color: primary || pressed ? theme.onAccent : theme.accent },
+          ]}>
+          {label}
+        </ThemedText>
+      )}
     </Pressable>
   );
 }
@@ -103,15 +108,33 @@ export function ListRow({
       style={({ pressed }) => [
         styles.row,
         { borderBottomColor: theme.textSecondary },
-        pressed && { backgroundColor: theme.backgroundSelected },
+        pressed && { backgroundColor: theme.accent },
         inert && styles.disabled,
       ]}>
-      <View style={styles.rowText}>
-        <ThemedText type="subtitle">{title}</ThemedText>
-        {detail !== undefined && <ThemedText themeColor="textSecondary">{detail}</ThemedText>}
-        {note !== undefined && <ThemedText type="smallBold">{note}</ThemedText>}
-      </View>
-      {value !== undefined && <ThemedText style={styles.rowValue}>{value}</ThemedText>}
+      {({ pressed }) => {
+        // Under a finger the row turns pale green, so its words turn dark to stay readable.
+        const ink = pressed ? { color: theme.onAccent } : null;
+        return (
+          <>
+            <View style={styles.rowText}>
+              <ThemedText type="subtitle" style={ink}>
+                {title}
+              </ThemedText>
+              {detail !== undefined && (
+                <ThemedText themeColor="textSecondary" style={ink}>
+                  {detail}
+                </ThemedText>
+              )}
+              {note !== undefined && (
+                <ThemedText type="smallBold" style={ink}>
+                  {note}
+                </ThemedText>
+              )}
+            </View>
+            {value !== undefined && <ThemedText style={[styles.rowValue, ink]}>{value}</ThemedText>}
+          </>
+        );
+      }}
     </Pressable>
   );
 }
@@ -187,6 +210,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.three,
     paddingVertical: Spacing.three,
+    // A little room at the sides, so the pressed color does not sit tight against the words.
+    marginHorizontal: -Spacing.two,
+    paddingHorizontal: Spacing.two,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowText: {

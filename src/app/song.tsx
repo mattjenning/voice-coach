@@ -123,16 +123,23 @@ export default function SongScreen() {
             style={({ pressed }) => [
               styles.line,
               { borderBottomColor: theme.textSecondary },
-              pressed && { backgroundColor: theme.backgroundSelected },
+              pressed && { backgroundColor: theme.accent },
             ]}>
-            <View style={styles.lineText}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Line {index + 1}
-                {passes[index] >= PASSES_TO_MASTER ? ', mastered' : ''}
-              </ThemedText>
-              <ThemedText style={styles.words}>{each.words}</ThemedText>
-            </View>
-            <PassMarks count={passes[index]} />
+            {({ pressed }) => {
+              const ink = pressed ? { color: theme.onAccent } : null;
+              return (
+                <>
+                  <View style={styles.lineText}>
+                    <ThemedText type="small" themeColor="textSecondary" style={ink}>
+                      Line {index + 1}
+                      {passes[index] >= PASSES_TO_MASTER ? ', mastered' : ''}
+                    </ThemedText>
+                    <ThemedText style={[styles.words, ink]}>{each.words}</ThemedText>
+                  </View>
+                  <PassMarks count={passes[index]} />
+                </>
+              );
+            }}
           </Pressable>
         ))}
       </View>
@@ -177,6 +184,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.three,
     paddingVertical: Spacing.three,
+    marginHorizontal: -Spacing.two,
+    paddingHorizontal: Spacing.two,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   lineText: {
