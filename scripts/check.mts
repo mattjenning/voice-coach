@@ -27,9 +27,11 @@ import { PitchSmoother, detectPitch, level } from '../src/lib/pitch.ts';
 import {
   FIRST_TARGET,
   HIGHEST_TARGET,
+  LISTEN_MS,
   LOWEST_TARGET,
   START,
   practiceReducer,
+  timeLeftMs,
   type Practice,
 } from '../src/lib/practice.ts';
 import { readWav, writeWav } from '../src/lib/wav.ts';
@@ -235,39 +237,86 @@ assert.equal(dropped.startedAt, null);
 
 // --- A practice session ----------------------------------------------------
 
-let session: Practice = START;
-assert.equal(session.target, FIRST_TARGET);
 const targetHz = midiToHz(FIRST_TARGET);
+const sing_ = (state: Practice, hz: number | null, atMs: number) =>
+  practiceReducer(state, { type: 'pitch', hz, atMs });
 
-session = practiceReducer(session, { type: 'pitch', hz: targetHz * 1.2, atMs: 0 }); // far off
-assert.equal(session.hold.heldMs, 0);
-for (let at = 100; at <= 100 + HOLD.goalMs; at += 50) {
-  session = practiceReducer(session, { type: 'pitch', hz: targetHz * 1.005, atMs: at });
-}
-assert.ok(session.hold.done);
-assert.equal(session.matched, 1);
-session = practiceReducer(session, { type: 'pitch', hz: targetHz, atMs: 9000 });
-assert.equal(session.matched, 1, 'one match is counted once');
-session = practiceReducer(session, { type: 'quiet' });
-assert.ok(session.hold.done, 'a finished hold survives the tone playing');
-assert.equal(session.hz, null);
+assert.equal(START.target, FIRST_TARGET);
+assert.equal(START.phase, 'idle');
+assert.equal(sing_(START, targetHz, 0), START, 'nothing is scored before a round starts');
 
-session = practiceReducer(session, { type: 'target', midi: session.target + 1 });
-assert.equal(session.target, FIRST_TARGET + 1);
-assert.ok(!session.hold.done, 'a new target starts a new hold');
-assert.equal(session.matched, 1);
-session = practiceReducer(session, { type: 'pitch', hz: targetHz, atMs: 10_000 });
-assert.equal(session.hold.heldMs, 0, 'the old note no longer matches');
+// A round that is matched: tone, then listening, then two seconds in tune.
+let round: Practice = practiceReducer(START, { type: 'begin' });
+assert.equal(round.phase, 'tone');
+assert.equal(sing_(round, targetHz, 0), round, 'nothing is scored while the tone plays');
+round = practiceReducer(round, { type: 'listen', atMs: 1000 });
+assert.equal(round.phase, 'listening');
+assert.equal(round.deadlineMs, 1000 + LISTEN_MS);
+assert.equal(timeLeftMs(round), LISTEN_MS);
 
-assert.equal(practiceReducer(session, { type: 'target', midi: 200 }).target, HIGHEST_TARGET);
-assert.equal(practiceReducer(session, { type: 'target', midi: -5 }).target, LOWEST_TARGET);
+round = sing_(round, targetHz * 2 ** (60 / 1200), 1200); // 60 cents sharp
+assert.equal(round.hold.heldMs, 0);
+assert.equal(Math.round(round.closest?.cents ?? 0), 60);
+round = sing_(round, targetHz * 2 ** (-30 / 1200), 1300); // closer
+assert.equal(Math.round(round.closest?.cents ?? 0), -30);
+round = sing_(round, targetHz * 2 ** (80 / 1200), 1400); // further away again
+assert.equal(Math.round(round.closest?.cents ?? 0), -30, 'the best attempt is kept');
+assert.equal(timeLeftMs(round), LISTEN_MS - 400);
 
-let half: Practice = practiceReducer(START, { type: 'pitch', hz: targetHz, atMs: 0 });
-half = practiceReducer(half, { type: 'pitch', hz: targetHz, atMs: 800 });
-assert.equal(half.hold.heldMs, 800);
-assert.equal(practiceReducer(half, { type: 'quiet' }).hold.heldMs, 0);
-assert.equal(practiceReducer(half, { type: 'again' }).hold.heldMs, 0);
-assert.equal(practiceReducer(half, { type: 'pitch', hz: null, atMs: 5000 }).hold.heldMs, 0);
+for (let at = 1500; at <= 1500 + HOLD.goalMs; at += 100) round = sing_(round, targetHz, at);
+assert.equal(round.phase, 'idle', 'matching ends the round at once');
+assert.equal(round.result, 'matched');
+assert.equal(round.matched, 1);
+assert.ok(round.hold.done);
+assert.equal(sing_(round, targetHz, 9000), round, 'a finished round ignores more singing');
+assert.equal(timeLeftMs(round), 0);
+
+// The next round starts clean on another note and keeps the count.
+round = practiceReducer(round, { type: 'begin', midi: round.target + 1 });
+assert.equal(round.target, FIRST_TARGET + 1);
+assert.equal(round.phase, 'tone');
+assert.equal(round.result, null);
+assert.equal(round.hold.heldMs, 0);
+assert.equal(round.closest, null);
+assert.equal(round.matched, 1);
+assert.equal(practiceReducer(round, { type: 'target', midi: 60 }), round, 'no changing note mid-round');
+
+// A round that runs out of time, with the last reading arriving late.
+let late: Practice = practiceReducer(START, { type: 'begin' });
+late = practiceReducer(late, { type: 'listen', atMs: 0 });
+late = sing_(late, targetHz * 2 ** (40 / 1200), 1000);
+late = sing_(late, targetHz, LISTEN_MS - 500); // in tune, but too late to hold two seconds
+assert.equal(late.phase, 'listening');
+late = sing_(late, targetHz, LISTEN_MS);
+assert.equal(late.phase, 'idle');
+assert.equal(late.result, 'missed');
+assert.equal(late.matched, 0);
+assert.equal(late.hz, null);
+assert.equal(Math.round(late.closest?.cents ?? 99), 0, 'the best attempt survives the round');
+
+// Silence all the way through: only the clock ends it.
+let silent: Practice = practiceReducer(START, { type: 'begin' });
+silent = practiceReducer(silent, { type: 'listen', atMs: 0 });
+silent = practiceReducer(silent, { type: 'tick', atMs: 2000 });
+assert.equal(silent.phase, 'listening');
+assert.equal(timeLeftMs(silent), LISTEN_MS - 2000);
+silent = practiceReducer(silent, { type: 'tick', atMs: LISTEN_MS + 50 });
+assert.equal(silent.result, 'missed');
+assert.equal(silent.closest, null);
+assert.equal(practiceReducer(silent, { type: 'tick', atMs: 99_999 }), silent);
+
+// Stopping by hand clears the round without a result.
+let stopped: Practice = practiceReducer(START, { type: 'begin' });
+stopped = practiceReducer(stopped, { type: 'stop' });
+assert.equal(stopped.phase, 'idle');
+assert.equal(stopped.result, null);
+assert.equal(practiceReducer(stopped, { type: 'listen', atMs: 5 }), stopped, 'a late tone does not restart it');
+
+// Choosing a note between rounds.
+assert.equal(practiceReducer(START, { type: 'target', midi: 200 }).target, HIGHEST_TARGET);
+assert.equal(practiceReducer(START, { type: 'target', midi: -5 }).target, LOWEST_TARGET);
+assert.equal(practiceReducer(START, { type: 'begin', midi: 999 }).target, HIGHEST_TARGET);
+assert.equal(practiceReducer(late, { type: 'target', midi: 50 }).result, null);
 
 // --- Sound files -----------------------------------------------------------
 

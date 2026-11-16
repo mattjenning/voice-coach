@@ -2,9 +2,10 @@ import {
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
   useAudioStream,
+  type AudioPlayer,
   type AudioStreamBuffer,
 } from 'expo-audio';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { Framer, firstChannel, thinningFactor } from '@/lib/frames';
@@ -12,7 +13,6 @@ import { PitchSmoother, detectPitch } from '@/lib/pitch';
 
 export type Listening =
   | 'off'
-  | 'starting'
   | 'on'
   /** The person said no to the microphone. */
   | 'denied'
@@ -20,19 +20,32 @@ export type Listening =
   | 'unsupported'
   | 'failed';
 
+/** How a call to playThenListen ended. */
+export type RoundStart =
+  /** The tone played and the microphone is now on. */
+  | 'listening'
+  /** The microphone could not be used. `status` says why. */
+  | 'failed'
+  /** Stopped before the microphone came on. */
+  | 'cancelled';
+
 export type PitchListener = {
   status: Listening;
   /** What went wrong, when status is 'failed'. */
   problem: string | null;
-  start: () => Promise<void>;
-  stop: () => void;
   /**
-   * Play a sound through the speaker. If the microphone is on, it is turned
-   * off first and back on after `ms`, because an iPhone will not play sound
-   * while this kind of microphone stream is running.
+   * Play a sound to its end, then turn the microphone on.
+   *
+   * The two cannot overlap. On an iPhone this kind of microphone stream puts
+   * the phone in record-only mode, and nothing plays until it stops.
    */
-  playThrough: (play: () => void, ms: number) => Promise<void>;
+  playThenListen: (player: AudioPlayer) => Promise<RoundStart>;
+  /** Turn everything off: the sound if it is playing, the microphone if it is on. */
+  stop: () => void;
 };
+
+/** If a sound never reports that it ended, stop waiting after this long. */
+const LONGEST_SOUND_MS = 3000;
 
 /**
  * Puts the phone's sound system in playing mode: sound comes out of the
@@ -47,9 +60,42 @@ async function switchToSpeaker(): Promise<void> {
 }
 
 /**
+ * Play a sound from the start and wait until it ends. If it has not loaded
+ * yet, wait for that first. Returns a function that gives up waiting.
+ */
+function playToEnd(player: AudioPlayer, done: () => void): () => void {
+  let started = false;
+  let startedAt = 0;
+  let finished = false;
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    subscription.remove();
+    done();
+  };
+  const begin = () => {
+    started = true;
+    startedAt = Date.now();
+    player.seekTo(0);
+    player.play();
+  };
+  const subscription = player.addListener('playbackStatusUpdate', (status) => {
+    if (!started && status.isLoaded) begin();
+    // Ignore an "ended" left over from the last time this sound played.
+    else if (started && status.didJustFinish && Date.now() - startedAt > 300) finish();
+  });
+  const timer = setTimeout(finish, LONGEST_SOUND_MS);
+  if (player.isLoaded) begin();
+
+  return finish;
+}
+
+/**
  * Listens to the microphone and reports the pitch being sung.
  *
- * `onPitch` is called about thirty times a second while listening, with the
+ * `onPitch` is called about ten times a second while listening, with the
  * pitch in hertz or null for silence. The sound is analyzed on the phone,
  * a slice at a time, and thrown away. Nothing is recorded or sent anywhere.
  */
@@ -58,7 +104,9 @@ export function usePitch(onPitch: (hz: number | null, atMs: number) => void): Pi
   const [problem, setProblem] = useState<string | null>(null);
   const framer = useRef<Framer | null>(null);
   const smoother = useRef<PitchSmoother | null>(null);
-  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Goes up by one each time a round starts or stops, so a stale round can tell. */
+  const run = useRef(0);
+  const sound = useRef<{ player: AudioPlayer; giveUp: () => void } | null>(null);
 
   const onBuffer = (buffer: AudioStreamBuffer) => {
     const now = Date.now();
@@ -79,87 +127,79 @@ export function usePitch(onPitch: (hz: number | null, atMs: number) => void): Pi
 
   const { stream } = useAudioStream({ channels: 1, encoding: 'float32', onBuffer });
 
-  const cancelResume = () => {
-    if (resumeTimer.current !== null) {
-      clearTimeout(resumeTimer.current);
-      resumeTimer.current = null;
+  const stop = useCallback(() => {
+    run.current++;
+    if (sound.current !== null) {
+      sound.current.player.pause();
+      sound.current.giveUp();
+      sound.current = null;
     }
-  };
+    if (stream?.isStreaming) stream.stop();
+    setStatus((current) => (current === 'on' ? 'off' : current));
+  }, [stream]);
 
-  /** Turn the microphone stream on. Starting it puts the phone in record-only mode. */
-  const begin = async () => {
-    if (!stream) return;
-    try {
-      framer.current?.reset();
-      smoother.current?.reset();
-      await stream.start();
-      setStatus('on');
-    } catch (error) {
+  const playThenListen = async (player: AudioPlayer): Promise<RoundStart> => {
+    stop();
+    const mine = run.current;
+    const fail = (error: unknown): RoundStart => {
       setProblem(error instanceof Error ? error.message : String(error));
       setStatus('failed');
-    }
-  };
+      return 'failed';
+    };
 
-  const start = async () => {
     // On the web, this version of expo-audio hands back no stream at all.
     if (!stream) {
       setStatus('unsupported');
-      return;
+      return 'failed';
     }
-    cancelResume();
-    setStatus('starting');
     setProblem(null);
+    setStatus('off');
+
+    // Ask for the microphone first, so the question never lands on top of the tone.
     try {
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
         setStatus('denied');
-        return;
+        return 'failed';
       }
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : String(error));
-      setStatus('failed');
-      return;
+      return fail(error);
     }
-    await begin();
-  };
+    if (mine !== run.current) return 'cancelled';
 
-  const stop = () => {
-    cancelResume();
-    if (stream?.isStreaming) stream.stop();
-    setStatus('off');
-  };
-
-  const playThrough = async (play: () => void, ms: number) => {
-    const resumeAfter = status === 'on';
-    cancelResume();
-    if (stream?.isStreaming) stream.stop();
     await switchToSpeaker();
-    play();
-    if (resumeAfter) {
-      resumeTimer.current = setTimeout(() => {
-        resumeTimer.current = null;
-        begin();
-      }, ms);
+    if (mine !== run.current) return 'cancelled';
+
+    await new Promise<void>((resolve) => {
+      sound.current = { player, giveUp: playToEnd(player, resolve) };
+    });
+    if (mine !== run.current) return 'cancelled';
+    sound.current = null;
+
+    try {
+      framer.current?.reset();
+      smoother.current?.reset();
+      // Starting the stream puts the phone in record-only mode.
+      await stream.start();
+    } catch (error) {
+      return fail(error);
     }
+    if (mine !== run.current) {
+      if (stream.isStreaming) stream.stop();
+      return 'cancelled';
+    }
+    setStatus('on');
+    return 'listening';
   };
 
-  // Stop listening when the app leaves the screen. A microphone left running
-  // in the background is the kind of surprise nobody wants.
+  // Stop when the app leaves the screen. A microphone left running in the
+  // background is the kind of surprise nobody wants.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') return;
-      if (resumeTimer.current !== null) {
-        clearTimeout(resumeTimer.current);
-        resumeTimer.current = null;
-      }
-      if (stream?.isStreaming) stream.stop();
-      setStatus((current) => (current === 'on' ? 'off' : current));
+      if (state !== 'active') stop();
     });
-    return () => {
-      subscription.remove();
-      if (resumeTimer.current !== null) clearTimeout(resumeTimer.current);
-    };
-  }, [stream]);
+    return () => subscription.remove();
+  }, [stop]);
 
-  return { status, problem, start, stop, playThrough };
+  return { status, problem, playThenListen, stop };
 }

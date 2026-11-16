@@ -1,26 +1,25 @@
-import { useAudioPlayer } from 'expo-audio';
-import { useReducer } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { tones } from '@/data/tones';
+import { tonePlayer, warmTone } from '@/hooks/tone-players';
 import { usePitch, type Listening } from '@/hooks/use-pitch';
 import { useTheme } from '@/hooks/use-theme';
 import { HOLD, compareToTarget, formatOctaves, type TargetReading } from '@/lib/hold';
 import { formatCents, formatHz, midiToHz, nearestNote, noteName } from '@/lib/notes';
 import {
   HIGHEST_TARGET,
+  LISTEN_MS,
   LOWEST_TARGET,
   START,
   practiceReducer,
+  timeLeftMs,
   type Practice,
 } from '@/lib/practice';
 
-/** The reference tone lasts 1.2 seconds. Listen again a moment after it ends. */
-const TONE_MS = 1350;
 /** The meter shows half a semitone either side of the target. */
 const METER_RANGE_CENTS = 50;
 
@@ -57,15 +56,15 @@ function Button({
   );
 }
 
-/** Choose the note to match, and hear it. */
+/** Choose the note to match. Locked while a round is running. */
 function TargetCard({
   target,
+  locked,
   onChange,
-  onHear,
 }: {
   target: number;
+  locked: boolean;
   onChange: (midi: number) => void;
-  onHear: () => void;
 }) {
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
@@ -76,7 +75,7 @@ function TargetCard({
         <Button
           label="−"
           accessibilityLabel="Lower note"
-          disabled={target <= LOWEST_TARGET}
+          disabled={locked || target <= LOWEST_TARGET}
           onPress={() => onChange(target - 1)}
         />
         <View style={styles.targetName}>
@@ -88,11 +87,10 @@ function TargetCard({
         <Button
           label="+"
           accessibilityLabel="Higher note"
-          disabled={target >= HIGHEST_TARGET}
+          disabled={locked || target >= HIGHEST_TARGET}
           onPress={() => onChange(target + 1)}
         />
       </View>
-      <Button label="Hear it" onPress={onHear} />
     </ThemedView>
   );
 }
@@ -149,23 +147,50 @@ function statusLine(status: Listening, problem: string | null): string | null {
   }
 }
 
+const seconds = (ms: number, digits: number) => (ms / 1000).toFixed(digits);
+
+/** "33 cents sharp, one octave below the target" */
+function howClose(reading: TargetReading): string {
+  const octave = formatOctaves(reading.octaves);
+  const cents = formatCents(reading.cents, HOLD.toleranceCents);
+  return octave ? `${cents}, ${octave} the target` : cents;
+}
+
+/** One line saying what is happening, or how the round went. */
+function describe(practice: Practice, reading: TargetReading | null): string {
+  const { phase, result, closest, target } = practice;
+  if (phase === 'tone') return 'Listen.';
+  if (phase === 'listening') return reading === null ? 'Sing it now.' : howClose(reading);
+  if (result === 'matched') return `Matched ${noteName(target)}.`;
+  if (result === 'missed') {
+    if (closest === null) {
+      return 'Time is up. No note was heard. Try singing louder, or closer to the phone.';
+    }
+    if (closest.inTune) {
+      return `Time is up. You reached the note but did not hold it for ${seconds(HOLD.goalMs, 0)} seconds.`;
+    }
+    return `Time is up. Your closest was ${howClose(closest)}.`;
+  }
+  return `Tap the button to hear the note. Then you have ${seconds(LISTEN_MS, 0)} seconds to sing it back.`;
+}
+
 /** What the singer is doing right now, in words and on the meter. */
-function Readout({ practice, listening }: { practice: Practice; listening: boolean }) {
+function Readout({ practice }: { practice: Practice }) {
   const theme = useTheme();
-  const { hz, target, hold } = practice;
+  const { hz, target, hold, phase, result, closest } = practice;
   const sung = hz === null ? null : nearestNote(hz);
   const reading = hz === null ? null : compareToTarget(hz, target);
-
-  let detail = listening ? 'Sing the note and hold it.' : 'Tap Start, then sing.';
-  if (reading !== null) {
-    const octave = formatOctaves(reading.octaves);
-    detail = formatCents(reading.cents, HOLD.toleranceCents);
-    if (octave) detail += `, ${octave} the target`;
-  }
-
+  // After a miss, leave the needle on the best attempt.
+  const shown = reading ?? (result === 'missed' ? closest : null);
   const progress = Math.min(1, hold.heldMs / HOLD.goalMs);
-  const seconds = (Math.min(hold.heldMs, HOLD.goalMs) / 1000).toFixed(1);
-  const goal = (HOLD.goalMs / 1000).toFixed(0);
+
+  let footnote = ' ';
+  if (phase === 'listening') {
+    const held = seconds(Math.min(hold.heldMs, HOLD.goalMs), 1);
+    footnote = `Held in tune: ${held} of ${seconds(HOLD.goalMs, 0)} seconds · ${seconds(timeLeftMs(practice), 1)} seconds left`;
+  } else if (result === 'matched') {
+    footnote = `You held it in tune for ${seconds(HOLD.goalMs, 0)} seconds.`;
+  }
 
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
@@ -177,8 +202,8 @@ function Readout({ practice, listening }: { practice: Practice; listening: boole
         style={[styles.sung, reading !== null && { color: reading.inTune ? theme.good : theme.off }]}>
         {sung === null ? '–' : sung.name}
       </ThemedText>
-      <ThemedText style={styles.centered}>{detail}</ThemedText>
-      <Meter reading={reading} />
+      <ThemedText style={styles.centered}>{describe(practice, reading)}</ThemedText>
+      <Meter reading={shown} />
       <View
         accessibilityRole="progressbar"
         accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
@@ -188,9 +213,7 @@ function Readout({ practice, listening }: { practice: Practice; listening: boole
         />
       </View>
       <ThemedText type="small" themeColor="textSecondary" style={styles.centered}>
-        {hold.done
-          ? `Matched ${noteName(target)}. You held it in tune for ${goal} seconds.`
-          : `Held in tune: ${seconds} of ${goal} seconds`}
+        {footnote}
       </ThemedText>
     </ThemedView>
   );
@@ -199,29 +222,49 @@ function Readout({ practice, listening }: { practice: Practice; listening: boole
 export default function PracticeScreen() {
   const [practice, dispatch] = useReducer(practiceReducer, START);
   const pitch = usePitch((hz, atMs) => dispatch({ type: 'pitch', hz, atMs }));
-  const player = useAudioPlayer(tones[practice.target]);
-  const listening = pitch.status === 'on';
+  const { stop } = pitch;
+  /** Counts rounds started, so a late answer from an old round can be told apart. */
+  const rounds = useRef(0);
+  const { phase, target, result } = practice;
+  const busy = phase !== 'idle';
   const trouble = statusLine(pitch.status, pitch.problem);
 
-  const hear = () => {
-    // The phone cannot play the tone while the microphone stream is running,
-    // so listening pauses for the length of the tone. That also stops the app
-    // from hearing its own speaker and scoring it as singing.
-    dispatch({ type: 'quiet' });
-    pitch.playThrough(() => {
-      player.seekTo(0);
-      player.play();
-    }, TONE_MS);
+  // One tap runs a whole round: the tone plays, then the microphone listens.
+  const startRound = async (midi: number) => {
+    const mine = ++rounds.current;
+    dispatch({ type: 'begin', midi });
+    const outcome = await pitch.playThenListen(tonePlayer(midi));
+    // A round that was stopped and replaced must not touch the new one.
+    if (mine !== rounds.current) return;
+    dispatch(outcome === 'listening' ? { type: 'listen', atMs: Date.now() } : { type: 'stop' });
   };
 
-  const toggle = () => {
-    if (listening) {
-      pitch.stop();
-      dispatch({ type: 'quiet' });
-    } else {
-      pitch.start();
-    }
+  const stopRound = () => {
+    stop();
+    dispatch({ type: 'stop' });
   };
+
+  // Turn the microphone off the moment a round ends, by a match or by the clock.
+  useEffect(() => {
+    if (phase === 'idle') stop();
+  }, [phase, stop]);
+
+  // Keep the countdown moving even if no sound arrives.
+  useEffect(() => {
+    if (phase !== 'listening') return;
+    const timer = setInterval(() => dispatch({ type: 'tick', atMs: Date.now() }), 250);
+    return () => clearInterval(timer);
+  }, [phase]);
+
+  // Load this note's tone and the next one up ahead of time.
+  useEffect(() => {
+    warmTone(target);
+    warmTone(target + 1);
+  }, [target]);
+
+  let startLabel = 'Play note, then sing';
+  if (result === 'matched') startLabel = 'Again';
+  if (result === 'missed') startLabel = 'Try again';
 
   return (
     <ThemedView style={styles.screen}>
@@ -235,34 +278,22 @@ export default function PracticeScreen() {
           </View>
 
           <TargetCard
-            target={practice.target}
+            target={target}
+            locked={busy}
             onChange={(midi) => dispatch({ type: 'target', midi })}
-            onHear={hear}
           />
 
-          <Readout practice={practice} listening={listening} />
+          <Readout practice={practice} />
 
-          {practice.hold.done && (
-            <View style={styles.row}>
-              <View style={styles.grow}>
-                <Button label="Again" onPress={() => dispatch({ type: 'again' })} />
-              </View>
-              <View style={styles.grow}>
-                <Button
-                  label="Next note up"
-                  disabled={practice.target >= HIGHEST_TARGET}
-                  onPress={() => dispatch({ type: 'target', midi: practice.target + 1 })}
-                />
-              </View>
-            </View>
+          {busy ? (
+            <Button primary label="Stop" onPress={stopRound} />
+          ) : (
+            <Button primary label={startLabel} onPress={() => startRound(target)} />
           )}
 
-          <Button
-            primary
-            label={listening ? 'Stop listening' : 'Start listening'}
-            disabled={pitch.status === 'starting'}
-            onPress={toggle}
-          />
+          {!busy && result === 'matched' && target < HIGHEST_TARGET && (
+            <Button label="Next note up" onPress={() => startRound(target + 1)} />
+          )}
 
           {trouble !== null && <ThemedText themeColor="off">{trouble}</ThemedText>}
 
@@ -358,13 +389,6 @@ const styles = StyleSheet.create({
   },
   holdFill: {
     height: '100%',
-  },
-  row: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  grow: {
-    flex: 1,
   },
   button: {
     minHeight: 48,
