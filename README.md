@@ -133,7 +133,7 @@ The app goes to beta testers when every line here is true. Today it is not.
 - [ ] Volume match has run start to finish on a phone.
 - [ ] Song mode has run start to finish on a phone, and its mastery survives closing the app.
 - [ ] A second person has tried it, ideally with a higher voice than Matthew's.
-- [ ] The app has its own icon. It still shows Expo's.
+- [x] The app has its own icon (2026-11-21): a tangerine voice line that settles into a yellow held note, on indigo. Source: `assets/images/icon-source.svg`. It shows on the home screen only in a real build, not in Expo Go.
 - [x] `npx expo lint` has run clean.
 - [ ] Matthew has joined the Apple Developer Program. TestFlight needs it.
 - [ ] A TestFlight build is installed on Matthew's own phone and works outside Expo Go.
