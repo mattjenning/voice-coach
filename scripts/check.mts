@@ -29,6 +29,7 @@ import {
   LOWEST_TONE,
   NO_RUN,
   SLIDE_SHAPE,
+  VOICE_GAP_MS,
   VOLUME_TOLERANCE,
   currentStep,
   loudnessShare,
@@ -736,6 +737,38 @@ assert.equal(currentStep(NO_RUN), null);
   const drone = singLine(0, () => 62);
   assert.ok(!isClean(drone), `droning scored ${drone.score}`);
   assert.ok(!isClean(singLine(0, () => null)));
+
+  // The ball on the singer's turn. Sing line 1 with words: the voice breaks for
+  // a fifth of a second at the start of every note, as consonants and breaths do.
+  {
+    const step = lineStep(song, 0);
+    let run = runReducer(NO_RUN, { type: 'start', steps: [step] });
+    run = runReducer(run, { type: 'listen', atMs: 0 });
+    assert.equal(run.reading, null, 'no ball before the singer starts');
+    let shown = 0;
+    let readings = 0;
+    for (let at = 500; run.phase === 'listening' && at < 30_000; at += 100) {
+      const t = at - 500;
+      const sinceNote = t - Math.max(...path.starts.filter((start) => start <= t));
+      const gap = t > 0 && sinceNote < 200;
+      run = hear(run, gap ? null : hzOf(path.midiAt(t) - 12), at);
+      if (run.phase !== 'listening') break;
+      readings++;
+      if (run.reading !== null) shown++;
+    }
+    assert.equal(shown, readings, `the ball showed for ${shown} of ${readings} readings of a sung line`);
+    assert.ok(isClean(run.results[0]), 'a line sung with words is still clean');
+
+    // A real stop, longer than a consonant, takes the ball away.
+    let quiet = runReducer(NO_RUN, { type: 'start', steps: [step] });
+    quiet = runReducer(quiet, { type: 'listen', atMs: 0 });
+    quiet = hear(quiet, hzOf(62), 100);
+    assert.notEqual(quiet.reading, null, 'the ball appears at the first note heard');
+    quiet = hear(quiet, null, 100 + VOICE_GAP_MS);
+    assert.notEqual(quiet.reading, null, 'it stays through a short break');
+    quiet = hear(quiet, null, 200 + VOICE_GAP_MS);
+    assert.equal(quiet.reading, null, 'and goes when the voice really stops');
+  }
 
   // Mastery: three clean passes a line.
   let passes = noPasses(song);

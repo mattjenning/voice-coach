@@ -129,6 +129,12 @@ export const SLIDE_TOLERANCE_CENTS = 50;
 export const SLIDE_PASS_SCORE = 70;
 /** How long the app waits for the singer to start before giving up. */
 const SLIDE_WAIT_MS = 3000;
+/**
+ * On a slide or a song line, how long the ball stays at the last pitch heard
+ * when the voice drops out. Sung words break the voice at every consonant and
+ * breath, and without this the ball blinks out at each one.
+ */
+export const VOICE_GAP_MS = 300;
 
 export function slideMs(slide: Slide): number {
   return slide.leadMs + slide.glideMs + slide.tailMs;
@@ -283,6 +289,8 @@ export type Run = {
   slideOnLine: number;
   slideErrorSum: number;
   slideVoiced: number;
+  /** When the singer's voice was last heard on this slide or line. */
+  voicedAt: number | null;
   /** The sung pitch over the slide, for drawing: time since the start, and note number. */
   trace: { tMs: number; midi: number }[];
   results: StepResult[];
@@ -312,6 +320,7 @@ const STEP_START = {
   slideOnLine: 0,
   slideErrorSum: 0,
   slideVoiced: 0,
+  voicedAt: null,
   trace: [] as { tMs: number; midi: number }[],
   loudness: null,
   levels: [] as number[],
@@ -471,7 +480,9 @@ function hearPath(run: Run, path: Path, hz: number | null, atMs: number): Run {
   if (tMs > path.totalMs) return { ...run, slideStartedAt: startedAt, clockMs: atMs };
 
   const target = path.midiAt(tMs);
-  let reading: TargetReading | null = null;
+  // A short break in the voice keeps the last reading on screen. Only real readings are scored.
+  const briefGap = run.voicedAt !== null && atMs - run.voicedAt <= VOICE_GAP_MS;
+  let reading: TargetReading | null = briefGap ? run.reading : null;
   let { slideOnLine, slideErrorSum, slideVoiced, trace } = run;
   if (hz !== null) {
     const raw = centsBetween(hz, midiToHz(target));
@@ -488,6 +499,7 @@ function hearPath(run: Run, path: Path, hz: number | null, atMs: number): Run {
     ...run,
     hz,
     reading,
+    voicedAt: hz === null ? run.voicedAt : atMs,
     slideStartedAt: startedAt,
     slideHeard: run.slideHeard + 1,
     slideOnLine,

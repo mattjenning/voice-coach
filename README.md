@@ -12,7 +12,7 @@ Everything in the app is built from one move. The app plays a note for three sec
 | --- | --- | --- |
 | Quick practice | Three kinds of practice, each ending in a report card with a percent score and a letter grade. **Step mode:** eight notes up a major scale from one of six starting notes, one attempt each. **Slide mode:** seven glides, climbing, descending or random, at three difficulties. The app plays each glide first while a ring rides its path; on your turn a ball shows your voice against the ring. **Volume match:** the app learns your softest and loudest singing, then asks for five loudness targets between them. | Step and Slide have run on a phone. Volume match has not. |
 | Progression | Ten guided levels. Level 1 finds your home note, the note you sing when asked for an easy one. Every later level is built from it. Levels train pitch matching, steps, jumps, range and breath control. Progress and achievements are saved on the phone. | Built. Not yet run on a phone. |
-| Song mode | Amazing Grace, a line at a time. The app plays a line, you sing it back, and it scores how much was on the notes and in time. Three clean passes master a line. Mastery is saved on the phone. | Built. Not yet run on a phone. |
+| Song mode | Amazing Grace, a line at a time. The app plays a line, you sing it back, and it scores how much was on the notes and in time. Three clean passes master a line. Mastery is saved on the phone. | Ran once on a phone, 2026-11-16, with two faults: line 1 was cut off on its last note, and no ball followed the voice. Both have fixes that have not been tried on a phone. |
 
 ## Run it
 
@@ -102,6 +102,7 @@ Matthew set the direction on 2026-11-16: dark with yellow over a light version a
 - **Slide sounds are made on the phone.** There are too many possible slides to ship a file for each, so the app works the sound out as numbers, saves it as a small file in the phone's throwaway storage, and plays that. Song mode will need the same trick to play phrases.
 - **A slide's clock starts when the singer does.** The score is the share of the slide sung within 50 cents of the moving pitch, so a slow start costs nothing but stopping early does.
 - **Slides and song lines are the same thing to the engine: a path.** A path is a pitch that moves over time. One piece of code plays it, draws it and scores it, which is why Song mode took little new code.
+- **The ball holds through short breaks.** Sung words break the voice at every consonant and breath. On a slide or a song line the ball stays at the last pitch heard for 0.3 seconds, so it does not blink out at each one. Only real readings are scored.
 - **Song mode is call and response.** The phone cannot play and listen at once, so the app sings a line and then the singer does. A line's clock starts when the singer starts.
 - **Loudness is measured against the singer's own range.** How loud a phone hears you depends on the phone and how far away it is, so Volume match first listens to your softest and loudest singing and sets its targets between them.
 - **Missed notes earn partial credit.** A matched note scores 100. A missed one gets up to 50 for how close the best attempt came (full marks on the note, nothing a semitone away) and up to 50 for how much of the hold was done in tune. The set's score is the average, graded on the school scale: A from 90, B from 80, C from 70, D from 60.
@@ -117,7 +118,7 @@ On Matthew's iPhone, 2026-11-16: the microphone stream in Expo Go, the reference
 These need a real iPhone and have not been tried:
 
 1. Volume match. Whether a phone's loudness readings are steady enough to hold a target has not been tried.
-2. Song mode. The tune is checked against itself, but nobody has sung along to it.
+2. Song mode. On its one phone run, 2026-11-16, line 1 was cut off and no ball followed the voice. The cut-off is fixed. For the ball, two fixes are in but the cause is not proven: the line's sound is now stopped before the microphone starts, and the ball now holds through the short breaks that words make in a voice. Nobody has yet sung a whole line with the ball showing.
 3. Slide mode's medium and hard difficulties.
 4. Progression. It has not been tried on a phone.
 5. How accurate the detector is on a real voice. A real set scored 92% on a phone, but nobody has checked a reading against a tuner.
