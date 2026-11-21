@@ -42,7 +42,6 @@ function LevelRow({
   progress: Progress;
   onStart: () => void;
 }) {
-  const theme = useTheme();
   const passed = isPassed(progress, level);
   const open = isOpen(progress, level);
   const isNext = nextLevel(progress) === level;

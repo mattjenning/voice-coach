@@ -30,9 +30,10 @@ It needs a real phone. The microphone stream this app uses does not exist in the
 ```
 node scripts/check.mts                          # all the logic, tested with made-up sound
 node node_modules/typescript/bin/tsc --noEmit   # type check
+npx expo lint                                   # lint: code mistakes such as unused variables
 ```
 
-Both must pass before any change counts as done.
+All three must pass before any change counts as done. The type check needs `expo-env.d.ts`, which `npx expo start` writes the first time it runs.
 
 The check builds every note from C2 to C6 as four kinds of tone (pure, voice-like, voice-like with hiss, and a weak fundamental) and requires each reading to land within 10 cents. The worst case today is 5.6 cents. A cent is one hundredth of a semitone. It then plays whole exercises, report cards and the progression path through with made-up singing.
 
@@ -121,7 +122,6 @@ These need a real iPhone and have not been tried:
 4. Progression. It has not been tried on a phone.
 5. How accurate the detector is on a real voice. A real set scored 92% on a phone, but nobody has checked a reading against a tuner.
 6. That progress and mastery are still there after the app is closed and opened again.
-7. `npx expo lint` has never run. The linter would not install in the build environment.
 
 ## Before beta
 
@@ -134,7 +134,7 @@ The app goes to beta testers when every line here is true. Today it is not.
 - [ ] Song mode has run start to finish on a phone, and its mastery survives closing the app.
 - [ ] A second person has tried it, ideally with a higher voice than Matthew's.
 - [ ] The app has its own icon. It still shows Expo's.
-- [ ] `npx expo lint` has run clean.
+- [x] `npx expo lint` has run clean.
 - [ ] Matthew has joined the Apple Developer Program. TestFlight needs it.
 - [ ] A TestFlight build is installed on Matthew's own phone and works outside Expo Go.
 
