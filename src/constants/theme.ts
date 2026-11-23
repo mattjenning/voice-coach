@@ -15,6 +15,10 @@ import { Platform } from 'react-native';
  *   voice  tangerine  where your voice is
  *   tune   yellow     in tune; it floods the pitch field as you hold a note
  *
+ * One exception: a letter grade sits on a block colored by the grade, from
+ * green for an A through yellow and orange to red for a D or an F
+ * (Matthew, 2026-11-23). Red means not passed.
+ *
  * Nothing is black, white or grey.
  *
  * The app ships dark: `dark` below is the look in use. `light` is the same
@@ -50,6 +54,12 @@ export const Colors = {
     voice: '#FF5A36',
     /** Off the note, as text. Darker than `voice` so it reads on paper. */
     off: '#C2381A',
+    /** Grade blocks, behind indigo letters. An A is green, a B is `tune`. */
+    gradeA: '#5ED38C',
+    /** A C: the lowest pass. */
+    gradeC: '#FF9A2E',
+    /** A D or an F: not passed. */
+    gradeFail: '#FF4D5E',
   },
   dark: {
     text: '#E9EBFF',
@@ -64,6 +74,9 @@ export const Colors = {
     onTune: '#1C1660',
     voice: '#FF6E4E',
     off: '#FF9A82',
+    gradeA: '#5ED38C',
+    gradeC: '#FF9A2E',
+    gradeFail: '#FF4D5E',
   },
 } as const;
 

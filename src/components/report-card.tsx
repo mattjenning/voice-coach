@@ -7,8 +7,25 @@ import { useTheme } from '@/hooks/use-theme';
 import type { StepResult } from '@/lib/exercise';
 import { HOLD } from '@/lib/hold';
 import { formatCents, noteName } from '@/lib/notes';
-import { grade, noteScore, rangeSize, summarize } from '@/lib/report';
+import { grade, noteScore, rangeSize, summarize, type Grade } from '@/lib/report';
 import { stepLabel } from '@/lib/slide';
+
+/** The block behind a grade: green, yellow, orange, then red for a D or an F. */
+function gradeColor(letter: Grade | null, theme: ReturnType<typeof useTheme>): string {
+  switch (letter) {
+    case 'A':
+      return theme.gradeA;
+    case 'B':
+      return theme.tune;
+    case 'C':
+      return theme.gradeC;
+    case 'D':
+    case 'F':
+      return theme.gradeFail;
+    default:
+      return theme.backgroundElement;
+  }
+}
 
 /** One fact: its name at the left, its value at the right, a thin rule under it. */
 function Fact({ label, value }: { label: string; value: string }) {
@@ -88,19 +105,14 @@ export function ReportCard({
   const summary = summarize(results);
   const letter = grade(summary);
   const range = rangeSize(summary);
-  const passed = letter === 'A' || letter === 'B';
   const miss = summary.averageOffCents === null ? null : Math.round(summary.averageOffCents);
   return (
     <Card>
       <Label>{title}</Label>
       <View style={styles.top}>
-        {/* The grade sits on a block of yellow when it is an A or a B. */}
-        <View
-          style={[
-            styles.gradeBlock,
-            { backgroundColor: passed ? theme.tune : theme.backgroundElement },
-          ]}>
-          <ThemedText style={[styles.grade, { color: passed ? theme.onTune : theme.text }]}>
+        {/* The grade sits on a block colored by the grade. */}
+        <View style={[styles.gradeBlock, { backgroundColor: gradeColor(letter, theme) }]}>
+          <ThemedText style={[styles.grade, { color: letter === null ? theme.text : theme.onTune }]}>
             {letter ?? '–'}
           </ThemedText>
         </View>

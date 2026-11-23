@@ -86,6 +86,11 @@ export function grade(summary: Summary): Grade | null {
   return 'F';
 }
 
+/** A C or better passes (Matthew, 2026-11-23). */
+export function isPassing(letter: Grade | null): boolean {
+  return letter === 'A' || letter === 'B' || letter === 'C';
+}
+
 /** How many notes wide the matched range is. A2 to A3 is 13. */
 export function rangeSize(summary: Summary): number {
   if (summary.lowestSung === null || summary.highestSung === null) return 0;

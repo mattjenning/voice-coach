@@ -12,6 +12,7 @@
  */
 import { HIGHEST_TONE, LOWEST_TONE, noteStep, type Step, type StepResult } from './exercise.ts';
 import { MAJOR_SCALE } from './quick.ts';
+import { grade, isPassing, summarize } from './report.ts';
 
 export type Progress = {
   /** The singer's comfortable note, found in level 1. Null until then. */
@@ -174,8 +175,14 @@ export function levelSteps(progress: Progress, level: Level): Step[] {
   return level.steps(progress.home ?? 0);
 }
 
+/**
+ * A level is passed by matching its pass mark, or by a grade of C or better
+ * (Matthew, 2026-11-23). Finding the home note still needs a matched note,
+ * because every level after is built on the note it hears.
+ */
 export function didPass(level: Level, results: StepResult[]): boolean {
-  return results.filter((result) => result.matched).length >= level.passMark;
+  if (results.filter((result) => result.matched).length >= level.passMark) return true;
+  return level.id !== 'home' && isPassing(grade(summarize(results)));
 }
 
 /** Fold the results of one attempt at a level into the saved progress. */

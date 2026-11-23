@@ -59,7 +59,7 @@ import {
   type Progress,
 } from '../src/lib/progression.ts';
 import { MAJOR_SCALE, SHIFTS, STARTS, canShift, canStartOn, scaleSteps } from '../src/lib/quick.ts';
-import { grade, noteScore, rangeSize, summarize } from '../src/lib/report.ts';
+import { grade, isPassing, noteScore, rangeSize, summarize } from '../src/lib/report.ts';
 import { DIFFICULTY, pathSound, slideSteps, stepLabel } from '../src/lib/slide.ts';
 import {
   AMAZING_GRACE,
@@ -830,6 +830,11 @@ assert.deepEqual(SHIFTS.map((shift) => shift.by), [-6, -1, 0, 1, 6]);
   assert.equal(letter([{ ...missed(0, 2000), matched: true }]), 'A');
   assert.equal(letter([missed(10, 1000)]), 'C');
   assert.equal(letter([missed(20, 400)]), 'F');
+  assert.deepEqual(
+    (['A', 'B', 'C', 'D', 'F', null] as const).map(isPassing),
+    [true, true, true, false, false, false],
+    'a C or better passes',
+  );
   assert.equal(summarize([missed(10, 1000), { ...missed(0, 2000), matched: true }]).score, 85);
 }
 for (const start of Object.values(STARTS)) {
@@ -904,8 +909,18 @@ for (const shift of SHIFTS) assert.ok(shift.spoken.length > 0 && shift.label.spl
   // A level below its pass mark is not passed; trying again does not double-count.
   const three = LEVELS.find((level) => level.id === 'three-up')!;
   const threeSteps = levelSteps(progress, three);
-  const oneOfThree = [result(threeSteps[0], true, 50), result(threeSteps[1], false, null), result(threeSteps[2], false, null)];
+  const oneOfThree = [result(threeSteps[0], true, 50), result(threeSteps[1], false, null, 0), result(threeSteps[2], false, null, 0)];
+  assert.equal(grade(summarize(oneOfThree)), 'F');
   assert.ok(!didPass(three, oneOfThree));
+  // Below the pass mark, a C or better still passes (Matthew, 2026-11-23).
+  const closeTwice = [result(threeSteps[0], false, null, 2000), result(threeSteps[1], false, null, 2000), result(threeSteps[2], false, null, 2000)];
+  assert.equal(grade(summarize(closeTwice)), 'C');
+  assert.ok(didPass(three, closeTwice), 'a C passes a level');
+  const nearlyC = [result(threeSteps[0], false, null, 1800), result(threeSteps[1], false, null, 2000), result(threeSteps[2], false, null, 2000)];
+  assert.equal(grade(summarize(nearlyC)), 'D');
+  assert.ok(!didPass(three, nearlyC), 'a D does not');
+  // The home level still needs a matched note, whatever the grade.
+  assert.ok(!didPass(homeLevel, [result(homeStep, false, null, 1900)]));
   progress = pass(progress, 'match');
   progress = pass(pass(progress, 'match'), 'three-up');
   assert.deepEqual(progress.passed, ['home', 'match', 'three-up']);

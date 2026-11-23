@@ -102,7 +102,9 @@ export default function ProgressionScreen() {
         subtitle={
           passed
             ? level.title
-            : `${level.title} needs ${level.passMark} of ${results.length}. Have another go.`
+            : level.id === 'home'
+              ? `${level.title} needs ${level.passMark} of ${results.length}. Have another go.`
+              : `${level.title} needs ${level.passMark} of ${results.length}, or a C. Have another go.`
         }>
         {foundHome && progress.home !== null && (
           <Card>
