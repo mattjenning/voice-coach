@@ -9,24 +9,38 @@ import { Button, Card, Label, ListRow, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { volumeSteps, type Step, type StepResult } from '@/lib/exercise';
 import { noteName } from '@/lib/notes';
+import { hitSteps } from '@/lib/hits';
 import { STARTS, scaleSteps, type StartChoice } from '@/lib/quick';
 import { slideSteps, type Difficulty, type SlideOrder } from '@/lib/slide';
 
-/** The kinds of practice. Step mode is the original: one note at a time up a scale. */
-type Mode = 'step' | 'slide' | 'volume';
+/**
+ * The kinds of practice. Scale mode is the original: one note at a time up a
+ * scale. It was called Step mode until 2026-11-23.
+ */
+type Mode = 'scale' | 'slide' | 'hits' | 'volume';
 
-const TITLES: Record<Mode, string> = { step: 'Step mode', slide: 'Slide mode', volume: 'Volume match' };
+const TITLES: Record<Mode, string> = {
+  scale: 'Scale mode',
+  slide: 'Slide mode',
+  hits: 'Hit the Notes',
+  volume: 'Volume match',
+};
 
 const MODES: { mode: Mode; title: string; line: string }[] = [
   {
-    mode: 'step',
-    title: 'Step mode',
+    mode: 'scale',
+    title: 'Scale mode',
     line: 'Eight notes up a major scale. Hear each one, sing it back, hold it for 2 seconds.',
   },
   {
     mode: 'slide',
     title: 'Slide mode',
     line: 'Seven slides from one note to another. The app plays each glide first, then you follow it.',
+  },
+  {
+    mode: 'hits',
+    title: 'Hit the Notes',
+    line: 'Five short runs of solid notes. The app plays each run first, then you land on every note.',
   },
   {
     mode: 'volume',
@@ -45,8 +59,8 @@ const CHOICES: { choice: StartChoice; label: string }[] = [
 ];
 
 const ORDERS: { order: SlideOrder; label: string }[] = [
-  { order: 'up', label: 'Step up' },
-  { order: 'down', label: 'Step down' },
+  { order: 'up', label: 'Up' },
+  { order: 'down', label: 'Down' },
   { order: 'random', label: 'Random' },
 ];
 
@@ -64,7 +78,8 @@ const span = (start: number) => `${noteName(start)} to ${noteName(start + 12)}`;
 /** What one set is called on a report card. */
 function setTitle(mode: Mode, start: number, order: SlideOrder, level: Difficulty): string {
   if (mode === 'volume') return 'Volume match';
-  if (mode === 'step') return `Steps, ${span(start)}`;
+  if (mode === 'scale') return `Scale, ${span(start)}`;
+  if (mode === 'hits') return `Hit the Notes, ${level}, ${span(start)}`;
   const label = ORDERS.find((each) => each.order === order)?.label.toLowerCase() ?? order;
   return `Slides, ${level}, ${label}, ${span(start)}`;
 }
@@ -97,9 +112,11 @@ export default function PracticeScreen() {
     const steps =
       mode === 'volume'
         ? volumeSteps()
-        : mode === 'step'
+        : mode === 'scale'
           ? scaleSteps(start)
-          : slideSteps(start, slideOrder, level, Math.random);
+          : mode === 'hits'
+            ? hitSteps(start, level, Math.random)
+            : slideSteps(start, slideOrder, level, Math.random);
     setAttempts(attempts + 1);
     setView({ name: 'singing', mode, start, order: slideOrder, steps, attempt: attempts + 1 });
   };
@@ -155,11 +172,6 @@ export default function PracticeScreen() {
         {showLatest && latest !== undefined && (
           <ReportCard notes title={`This set: ${latest.title}`} results={latest.results} />
         )}
-        <ReportCard title="This session" results={everything} />
-        <Button
-          label={`Full session report card (${setCount})`}
-          onPress={() => setView({ name: 'session', back: view })}
-        />
         {mode === 'volume' ? (
           <Button primary label="Go again" onPress={() => sing('volume', ANY_NOTE, view.order)} />
         ) : (
@@ -171,6 +183,11 @@ export default function PracticeScreen() {
             </ThemedText>
           </Card>
         )}
+        <ReportCard title="This session" results={everything} />
+        <Button
+          label={`Full session report card (${setCount})`}
+          onPress={() => setView({ name: 'session', back: view })}
+        />
         <Button label="Change practice mode" onPress={() => setView({ name: 'menu' })} />
       </Screen>
     );
@@ -178,6 +195,20 @@ export default function PracticeScreen() {
 
   if (view.name === 'choose') {
     const { mode } = view;
+    const levelButtons = (
+      <View style={styles.row}>
+        {LEVELS.map((each) => (
+          <View key={each.level} style={styles.cell}>
+            <Button
+              compact
+              label={each.label}
+              primary={each.level === level}
+              onPress={() => setLevel(each.level)}
+            />
+          </View>
+        ))}
+      </View>
+    );
     return (
       <Screen
         title={TITLES[mode]}
@@ -198,28 +229,30 @@ export default function PracticeScreen() {
               ))}
             </View>
             <ThemedText type="small" themeColor="textSecondary">
-              Step up climbs the scale. Step down comes back. Random goes either way.
+              Up slides all rise and Down slides all fall, each from a different note. Random goes
+              either way.
             </ThemedText>
           </Card>
         )}
         {mode === 'slide' && (
           <Card>
             <Label>How hard</Label>
-            <View style={styles.row}>
-              {LEVELS.map((each) => (
-                <View key={each.level} style={styles.cell}>
-                  <Button
-                    compact
-                    label={each.label}
-                    primary={each.level === level}
-                    onPress={() => setLevel(each.level)}
-                  />
-                </View>
-              ))}
-            </View>
+            {levelButtons}
             <ThemedText type="small" themeColor="textSecondary">
-              Easy slides move one note of the scale and last 4 seconds. Medium move up to three
-              and last 5. Hard move three to five, last 6, and on Random may turn round part way.
+              Easy slides move one note of the scale. Medium move up to three and take a little
+              longer. Hard move three to five, take longer still, and on Random may turn round part
+              way. Every slide has its own speed.
+            </ThemedText>
+          </Card>
+        )}
+        {mode === 'hits' && (
+          <Card>
+            <Label>How hard</Label>
+            {levelButtons}
+            <ThemedText type="small" themeColor="textSecondary">
+              Easy: four notes, each 0.75 seconds, a scale note apart, all one way, inside five
+              notes. Medium: six half-second notes, up to two apart, turning round once, across the
+              octave. Hard: eight notes of 0.4 seconds, jumps up to four, any direction.
             </ThemedText>
           </Card>
         )}

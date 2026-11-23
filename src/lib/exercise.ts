@@ -52,6 +52,12 @@ export type Step = {
   volume?: Volume;
   /** A short countdown before listening starts. Nothing sung during it counts. */
   countdownMs?: number;
+  /**
+   * For a slide or phrase: start its clock the moment listening starts
+   * (after any countdown), instead of waiting for the singer's first note.
+   * Silence after the cue counts against the singer.
+   */
+  onCue?: boolean;
 };
 
 /** How long the countdown before each Volume match step lasts. Shown as three dots. */
@@ -597,6 +603,7 @@ export function runReducer(run: Run, event: RunEvent): Run {
       return {
         ...run,
         phase: 'listening',
+        slideStartedAt: step.onCue ? event.atMs + countdown : null,
         countdownUntil: countdown > 0 ? event.atMs + countdown : null,
         deadlineMs: event.atMs + countdown + step.listenMs,
         clockMs: event.atMs,

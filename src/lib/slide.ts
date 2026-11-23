@@ -2,14 +2,14 @@
  * Slide mode: the app plays a pitch that glides from one note to another,
  * and the singer follows the glide.
  *
- * A set is seven slides across one octave of a major scale. "Up" climbs,
- * "down" descends, and "random" goes either way. Difficulty sets how far a
- * slide may travel and how long it lasts.
+ * A set is seven slides across one octave of a major scale. "Up" rises,
+ * "down" falls, and "random" goes either way. Difficulty sets how far a
+ * slide may travel and how long it lasts on average.
  *
  * Pure logic. The sound is made here as numbers; saving and playing it is
  * done elsewhere.
  */
-import { slideStep, type Path, type Step } from './exercise.ts';
+import { COUNTDOWN_MS, SLIDE_SHAPE, slideMs, slideStep, type Path, type Step } from './exercise.ts';
 import { midiToHz, noteName } from './notes.ts';
 import { MAJOR_SCALE } from './quick.ts';
 
@@ -34,7 +34,24 @@ export const DIFFICULTY: Record<
 const TURN_SHARE = 0.4;
 
 /**
+ * How much a slide's speed varies: its glide takes between this share of the
+ * usual time and its inverse. Slower and quicker slides keep a set from
+ * feeling the same seven times over.
+ */
+const SPEED_SPREAD = 0.75;
+/** How long the first note is held before the glide, shortest and longest. */
+const LEAD_MS = { least: 300, most: 900 };
+
+/**
  * The seven slides of one set.
+ *
+ * Every slide starts somewhere different: "up" slides all rise and "down"
+ * slides all fall, but no two slides in a row start on the same note. Each
+ * one also glides at its own speed and holds its first note for its own time.
+ *
+ * Each slide starts on cue, after a one-second countdown, instead of waiting
+ * for the singer.
+ *
  * `random` is a function that returns a number from 0 up to 1, like
  * Math.random. It is passed in so a check can use a repeatable one.
  */
@@ -48,33 +65,47 @@ export function slideSteps(
   const top = scale.length - 1;
   const { minSteps, maxSteps, extraMs, turns } = DIFFICULTY[difficulty];
   const size = () => minSteps + Math.floor(random() * (maxSteps - minSteps + 1));
-  const steps: Step[] = [];
-  for (let i = 0; i < top; i++) {
+  const pick = (count: number) => Math.floor(random() * count);
+
+  /** One slide, with a fresh speed and lead-in. */
+  const make = (from: number, to: number, via?: number): Step => {
+    const speed = SPEED_SPREAD + random() * (1 / SPEED_SPREAD - SPEED_SPREAD);
+    const step = slideStep(scale[from], scale[to], via === undefined ? undefined : scale[via]);
+    const slide = step.slide!;
+    // Whole tenths of a second, so the numbers stay tidy.
+    slide.glideMs = Math.round(((SLIDE_SHAPE.glideMs + extraMs) * speed) / 100) * 100;
+    slide.leadMs = LEAD_MS.least + Math.round((random() * (LEAD_MS.most - LEAD_MS.least)) / 100) * 100;
+    return { ...step, listenMs: slideMs(slide) + 1000, countdownMs: COUNTDOWN_MS, onCue: true };
+  };
+
+  /** One slide's notes, as places on the scale. */
+  const draw = (): [number, number, number | undefined] => {
     const far = size();
-    if (order === 'up') {
-      // Near the top there is no room left to climb, so start low enough to fit.
-      const from = Math.min(i, top - far);
-      steps.push(slideStep(scale[from], scale[from + far], undefined, extraMs));
-    } else if (order === 'down') {
-      const from = Math.max(top - i, far);
-      steps.push(slideStep(scale[from], scale[from - far], undefined, extraMs));
-    } else {
-      // Start anywhere the slide fits, going up or down.
-      const upward = random() < 0.5;
-      const from = upward
-        ? Math.floor(random() * (top - far + 1))
-        : far + Math.floor(random() * (top - far + 1));
-      const turn = upward ? from + far : from - far;
-      if (turns && random() < TURN_SHARE) {
-        // Out, then back the other way. The way back need not be as far as
-        // the way out: it is its own size, cut short only by the end of the scale.
-        const room = upward ? turn : top - turn;
-        const back = Math.min(size(), room);
-        steps.push(slideStep(scale[from], scale[upward ? turn - back : turn + back], scale[turn], extraMs));
-      } else {
-        steps.push(slideStep(scale[from], scale[turn], undefined, extraMs));
-      }
+    // Start anywhere the slide fits.
+    const low = pick(top - far + 1);
+    if (order === 'up') return [low, low + far, undefined];
+    if (order === 'down') return [low + far, low, undefined];
+    const upward = random() < 0.5;
+    const from = upward ? low : low + far;
+    const turn = upward ? low + far : low;
+    if (turns && random() < TURN_SHARE) {
+      // Out, then back the other way. The way back need not be as far as
+      // the way out: it is its own size, cut short only by the end of the scale.
+      const room = upward ? turn : top - turn;
+      const back = Math.min(size(), room);
+      return [from, upward ? turn - back : turn + back, turn];
     }
+    return [from, turn, undefined];
+  };
+
+  const steps: Step[] = [];
+  let lastStart = -1;
+  while (steps.length < top) {
+    let notes = draw();
+    // Never two slides in a row from the same note. Draw again until it differs.
+    for (let tries = 0; tries < 20 && notes[0] === lastStart; tries++) notes = draw();
+    lastStart = notes[0];
+    steps.push(make(notes[0], notes[1], notes[2]));
   }
   return steps;
 }

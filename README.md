@@ -10,7 +10,7 @@ Everything in the app is built from one move. The app plays a note for three sec
 
 | Mode | What it does | State |
 | --- | --- | --- |
-| Quick practice | Three kinds of practice, each ending in a report card with a percent score and a letter grade. **Step mode:** eight notes up a major scale from one of six starting notes, one attempt each. **Slide mode:** seven glides, climbing, descending or random, at three difficulties. The app plays each glide first while a ring rides its path; on your turn a ball shows your voice against the ring. **Volume match:** no note plays; the microphone comes on straight away, and each step opens with a one-second countdown of three dots. The app learns your softest and loudest singing, then asks for five loudness targets between them. | Step and Slide have run on a phone. Volume match ran on a phone on 2026-11-23 but was unreliable; the fix has not been tried on a phone. |
+| Quick practice | Four kinds of practice, each ending in a report card with a percent score and a letter grade. **Scale mode** (called Step mode until 2026-11-23): eight notes up a major scale from one of six starting notes, one attempt each. **Slide mode:** seven glides, rising, falling or random, at three difficulties. The app plays each glide first while a ring rides its path; on your turn, after a one-second countdown of three dots, the ring sets off at once and a ball shows your voice against it. Each slide starts on its own note and has its own speed and lead-in. **Hit the Notes:** five short runs of solid notes on the scale; the app plays each run, then after the countdown you sing it back note for note. Easy: four 0.75-second notes, one scale note apart, all one way, inside five notes. Medium: six half-second notes, up to two apart, turning once, across the octave. Hard: eight 0.4-second notes, jumps of up to four, any direction. **Volume match:** no note plays; the microphone comes on straight away, and each step opens with the same countdown. The app learns your softest and loudest singing, then asks for five loudness targets between them. | Scale and Slide have run on a phone. The on-cue start and varied slides, and all of Hit the Notes, have not been tried on a phone (2026-11-23). Volume match ran on a phone on 2026-11-23 but was unreliable; the fix has not been tried on a phone. |
 | Progression | Ten guided levels. Level 1 finds your home note, the note you sing when asked for an easy one. Every later level is built from it. Levels train pitch matching, steps, jumps, range and breath control. Progress and achievements are saved on the phone. | Built. Not yet run on a phone. |
 | Song mode | Amazing Grace, a line at a time. The app plays a line, you sing it back, and it scores how much was on the notes and in time. Three clean passes master a line. Mastery is saved on the phone. | Ran once on a phone, 2026-11-16, with two faults: line 1 was cut off on its last note, and no ball followed the voice. Both have fixes that have not been tried on a phone. |
 
@@ -49,6 +49,7 @@ The check builds every note from C2 to C6 as four kinds of tone (pure, voice-lik
 | `src/lib/exercise.ts` | The engine. An exercise is a list of steps; this is every way one can unfold. Pure logic. |
 | `src/lib/quick.ts` | The scale, the six starting notes, the shifts |
 | `src/lib/slide.ts` | Slide mode: the sets, the difficulties, and the sound of a slide or phrase worked out as numbers |
+| `src/lib/hits.ts` | Hit the Notes: the runs of notes and the three difficulties |
 | `src/lib/song.ts` | Song mode: Amazing Grace written out as notes, and the rules of mastery |
 | `src/hooks/slide-sounds.ts` | Saves the sound of a slide or phrase on the phone and plays it |
 | `src/hooks/use-passes.ts` | Saves Song mode's clean passes on the phone |
@@ -129,10 +130,11 @@ These need a real iPhone and have not been tried:
 
 The app goes to beta testers when every line here is true. Today it is not.
 
-- [x] Step mode has run start to finish on a phone.
+- [x] Step mode (now Scale mode) has run start to finish on a phone.
 - [x] Slide mode has run start to finish on a phone.
 - [ ] Progression has run start to finish on a phone, and its progress survives closing the app.
 - [ ] Volume match has run start to finish on a phone.
+- [ ] Hit the Notes has run start to finish on a phone.
 - [ ] Song mode has run start to finish on a phone, and its mastery survives closing the app.
 - [ ] A second person has tried it, ideally with a higher voice than Matthew's.
 - [x] The app has its own icon (2026-11-21): a tangerine voice line that settles into a yellow held note, on indigo. Source: `assets/images/icon-source.svg`. It shows on the home screen only in a real build, not in Expo Go.

@@ -63,6 +63,7 @@ import {
 import { MAJOR_SCALE, SHIFTS, STARTS, canShift, canStartOn, scaleSteps } from '../src/lib/quick.ts';
 import { grade, isPassing, noteScore, rangeSize, summarize } from '../src/lib/report.ts';
 import { DIFFICULTY, pathSound, slideSteps, stepLabel } from '../src/lib/slide.ts';
+import { HIT_LEVELS, HIT_RUNS, hitSteps } from '../src/lib/hits.ts';
 import {
   AMAZING_GRACE,
   PASSES_TO_MASTER,
@@ -481,10 +482,23 @@ assert.equal(currentStep(NO_RUN), null);
   assert.equal(ticking.index, 1, 'four seconds after the first sound, it moves on');
 
   // The sets: seven slides each.
-  const up = slideSteps(48, 'up', 'easy', seeded(3));
-  assert.deepEqual(up.map(stepLabel), ['C3 → D3', 'D3 → E3', 'E3 → F3', 'F3 → G3', 'G3 → A3', 'A3 → B3', 'B3 → C4']);
-  const down = slideSteps(48, 'down', 'easy', seeded(3));
-  assert.deepEqual(down.map(stepLabel), ['C4 → B3', 'B3 → A3', 'A3 → G3', 'G3 → F3', 'F3 → E3', 'E3 → D3', 'D3 → C3']);
+  // Up and down sets start from different notes, and never repeat a slide back to back.
+  for (const order of ['up', 'down', 'random'] as const) {
+    for (const level of ['easy', 'medium', 'hard'] as const) {
+      for (let seed = 1; seed <= 20; seed++) {
+        const set = slideSteps(48, order, level, seeded(seed));
+        const labels = set.map(stepLabel);
+        for (let i = 1; i < labels.length; i++) {
+          assert.notEqual(labels[i], labels[i - 1], `${order} ${level}: no slide twice in a row`);
+        }
+        assert.ok(new Set(set.map((each) => each.midi)).size >= 3, `${order} ${level}: varied starts`);
+        for (const each of set) {
+          assert.equal(each.onCue, true, 'slides start on cue');
+          assert.equal(each.countdownMs, COUNTDOWN_MS, 'after a one-second countdown');
+        }
+      }
+    }
+  }
   const scaleNotes = MAJOR_SCALE.map((above) => 48 + above);
   for (const seed of [1, 2, 3, 4, 5]) {
     const any = slideSteps(48, 'random', 'hard', seeded(seed));
@@ -535,6 +549,8 @@ assert.equal(currentStep(NO_RUN), null);
     let uneven = 0;
     let longest = 0;
     let shortest = 99;
+    const glides = new Set<number>();
+    const leads = new Set<number>();
     for (const order of ['up', 'down', 'random'] as const) {
       for (let seed = 1; seed <= 30; seed++) {
         const set = slideSteps(48, order, level, seeded(seed));
@@ -547,7 +563,14 @@ assert.equal(currentStep(NO_RUN), null);
             travelled >= rule.minSteps && travelled <= rule.maxSteps,
             `${level} ${order}: ${stepLabel(each)}`,
           );
-          assert.equal(each.slide!.glideMs, SLIDE_SHAPE.glideMs + rule.extraMs);
+          const usual = SLIDE_SHAPE.glideMs + rule.extraMs;
+          assert.ok(
+            each.slide!.glideMs >= usual * 0.74 && each.slide!.glideMs <= usual * 1.34,
+            `${level} glide of ${each.slide!.glideMs} ms is near ${usual}`,
+          );
+          assert.ok(each.slide!.leadMs >= 300 && each.slide!.leadMs <= 900);
+          glides.add(each.slide!.glideMs);
+          leads.add(each.slide!.leadMs);
           longest = Math.max(longest, travelled);
           shortest = Math.min(shortest, travelled);
           if (each.slide!.viaMidi !== undefined) {
@@ -569,10 +592,40 @@ assert.equal(currentStep(NO_RUN), null);
     assert.equal(shortest, rule.minSteps, `${level} never moves less than ${rule.minSteps}`);
     if (rule.turns) assert.ok(uneven > 10, 'many turning slides come back a different distance');
     assert.equal(turning > 0, rule.turns, `${level} ${rule.turns ? 'has' : 'has no'} turning slides`);
+    assert.ok(glides.size >= 8, `${level} slides glide at many speeds (${glides.size})`);
+    assert.ok(leads.size >= 5, `${level} slides hold their first note for different times`);
   }
-  assert.equal(slideMs(slideSteps(48, 'up', 'easy', seeded(1))[0].slide!), 4000);
-  assert.equal(slideMs(slideSteps(48, 'up', 'medium', seeded(1))[0].slide!), 5000);
-  assert.equal(slideMs(slideSteps(48, 'up', 'hard', seeded(1))[0].slide!), 6000);
+  // On average, harder slides still take longer.
+  const average = (level: 'easy' | 'medium' | 'hard') => {
+    const all = Array.from({ length: 20 }, (_, i) => slideSteps(48, 'random', level, seeded(i + 1))).flat();
+    return all.reduce((sum, each) => sum + each.slide!.glideMs, 0) / all.length;
+  };
+  assert.ok(average('easy') < average('medium') && average('medium') < average('hard'));
+
+  // On cue: the slide's clock starts when the countdown ends, not when the singer does.
+  {
+    const cued = slideSteps(48, 'up', 'easy', seeded(4))[0];
+    const cuedPath = stepPath(cued)!;
+    const sing = (lateBy: number) => {
+      let run = runReducer(NO_RUN, { type: 'start', steps: [cued] });
+      run = runReducer(run, { type: 'listen', atMs: 0 });
+      assert.equal(run.slideStartedAt, COUNTDOWN_MS);
+      for (let at = 100; run.phase === 'listening' && at < 20_000; at += 100) {
+        const t = at - COUNTDOWN_MS;
+        run = hear(run, t < lateBy ? null : hzOf(cuedPath.midiAt(Math.max(0, t))), at);
+      }
+      return run;
+    };
+    assert.equal(sing(0).results[0].score, 100, 'on cue and on the line');
+    const late = sing(1500).results[0].score ?? -1;
+    assert.ok(late > 40 && late < 80, `starting 1.5 seconds late scored ${late}`);
+    // The clock alone ends it, even in silence.
+    let quiet = runReducer(NO_RUN, { type: 'start', steps: [cued, cued] });
+    quiet = runReducer(quiet, { type: 'listen', atMs: 0 });
+    quiet = runReducer(quiet, { type: 'tick', atMs: COUNTDOWN_MS + cuedPath.totalMs + 50 });
+    assert.equal(quiet.index, 1);
+    assert.equal(quiet.results[0].score, 0);
+  }
 
   // The sound of a slide really starts on one note and ends on the other.
   const sound = pathSound(stepPath(step)!, 12_000);
@@ -587,6 +640,75 @@ assert.equal(currentStep(NO_RUN), null);
   let peak = 0;
   for (const value of sound) peak = Math.max(peak, Math.abs(value));
   assert.ok(Math.abs(peak - 0.9) < 0.001);
+}
+
+// --- Hit the Notes ----------------------------------------------------------
+
+{
+  const scaleNotes = MAJOR_SCALE.map((above) => 48 + above);
+  const place = (midi: number) => scaleNotes.indexOf(midi);
+  for (const level of ['easy', 'medium', 'hard'] as const) {
+    const rule = HIT_LEVELS[level];
+    let biggest = 0;
+    let lowest = 99;
+    let highest = -1;
+    const firsts = new Set<number>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const set = hitSteps(48, level, seeded(seed));
+      assert.equal(set.length, HIT_RUNS);
+      for (const each of set) {
+        const notes = each.phrase!;
+        assert.equal(each.onCue, true, 'starts on cue');
+        assert.equal(each.countdownMs, COUNTDOWN_MS);
+        assert.equal(notes.length, rule.notes, `${level} runs have ${rule.notes} notes`);
+        const places = notes.map((note) => place(note.midi));
+        assert.ok(places.every((p) => p >= 0), 'every note is on the scale');
+        assert.ok(notes.every((note) => note.ms === rule.noteMs), `${level} notes last ${rule.noteMs} ms`);
+        assert.ok(Math.max(...places) - Math.min(...places) < rule.span, `${level} stays inside ${rule.span} notes`);
+        let changes = 0;
+        for (let i = 1; i < places.length; i++) {
+          const jump = places[i] - places[i - 1];
+          assert.ok(jump !== 0 && Math.abs(jump) <= rule.maxJump, `${level}: ${each.name}`);
+          biggest = Math.max(biggest, Math.abs(jump));
+          if (i > 1 && Math.sign(jump) !== Math.sign(places[i - 1] - places[i - 2])) changes++;
+        }
+        if (rule.turns !== Infinity) assert.equal(changes, rule.turns, `${level} turns ${rule.turns} times: ${each.name}`);
+        lowest = Math.min(lowest, ...places);
+        highest = Math.max(highest, ...places);
+        firsts.add(places[0]);
+        // The whole run is the notes, one after another.
+        const path = stepPath(each)!;
+        assert.equal(path.totalMs, rule.notes * rule.noteMs);
+        assert.equal(path.midiAt(rule.noteMs * 1.5), notes[1].midi);
+      }
+    }
+    assert.equal(biggest, rule.maxJump, `${level} uses its biggest jump`);
+    assert.equal(lowest, 0, `${level} reaches the bottom`);
+    assert.equal(highest, 7, `${level} reaches the top`);
+    assert.ok(firsts.size >= 5, `${level} runs start on many notes`);
+  }
+  assert.notDeepEqual(
+    hitSteps(48, 'medium', seeded(1)).map(stepLabel),
+    hitSteps(48, 'medium', seeded(2)).map(stepLabel),
+  );
+  assert.equal(stepLabel(hitSteps(48, 'easy', seeded(1))[0]).split(' ').length, 4, 'named by its notes');
+
+  // Singing the run on cue scores full marks; singing one note throughout does not.
+  const run = hitSteps(48, 'medium', seeded(3))[0];
+  const path = stepPath(run)!;
+  const sing = (pitchAt: (t: number) => number) => {
+    let state = runReducer(NO_RUN, { type: 'start', steps: [run] });
+    state = runReducer(state, { type: 'listen', atMs: 0 });
+    for (let at = 50; state.phase === 'listening' && at < 20_000; at += 50) {
+      state = hear(state, hzOf(pitchAt(Math.max(0, at - COUNTDOWN_MS))), at);
+    }
+    return state.results[0];
+  };
+  const good = sing((t) => path.midiAt(t));
+  assert.equal(good.score, 100);
+  assert.ok(good.matched);
+  const flat = sing(() => run.phrase![0].midi);
+  assert.ok(!flat.matched && (flat.score ?? 100) < 50, `one note throughout scored ${flat.score}`);
 }
 
 // --- Volume match ----------------------------------------------------------

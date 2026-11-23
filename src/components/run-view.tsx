@@ -165,8 +165,8 @@ function useElapsed(running: boolean, key: number): number {
  * The small dots are the path.
  *
  * While the app plays the slide, a ring rides along the path so you can see
- * what you are hearing. On your turn the ring sets off again when you start
- * singing, showing where the tone would be, and a ball shows where your
+ * what you are hearing. On your turn the ring sets off again, on cue after
+ * the countdown or else when you start singing, showing where the tone would be, and a ball shows where your
  * voice is. Keep the ball in the ring.
  */
 function PathField({ run, path }: { run: Run; path: Path }) {
@@ -179,8 +179,11 @@ function PathField({ run, path }: { run: Run; path: Path }) {
 
   const playing = run.phase === 'tone';
   const heardFor = useElapsed(playing, run.turn) - SOUND_LEAD_MS;
+  // On cue, the clock is set before the countdown ends: until then the ring waits at the start.
   const sungFor =
-    run.slideStartedAt === null || run.clockMs === null ? null : run.clockMs - run.slideStartedAt;
+    run.slideStartedAt === null || run.clockMs === null
+      ? null
+      : Math.max(0, run.clockMs - run.slideStartedAt);
   // Where the tone is right now: while it plays, or on your turn once you have started.
   // On your turn, before you start, the ring waits at the beginning of the path.
   const waiting = run.phase === 'listening' && sungFor === null;
@@ -294,6 +297,8 @@ export function RunView({ run }: { run: Run }) {
   const path = stepPath(step);
   const slide = path !== null;
   const phrase = step.phrase !== undefined;
+  /** Hit the Notes: a run of solid notes that starts on cue. A song line waits for the singer. */
+  const hits = phrase && step.onCue === true;
   const volume = step.volume;
   const holdShare = step.holdMs <= 0 ? 0 : Math.min(1, hold.heldMs / step.holdMs);
   const onLine = run.slideHeard === 0 ? 0 : Math.round((100 * run.slideOnLine) / run.slideHeard);
@@ -301,7 +306,7 @@ export function RunView({ run }: { run: Run }) {
   let detail = slide ? 'Listen. Your turn comes next.' : 'Listen.';
   if (phase === 'listening') {
     if (reading === null) {
-      detail = anyNote ? 'Sing "ah" on any easy note.' : slide ? (phrase ? 'Your turn. Sing the line.' : 'Your turn. Sing the slide.') : 'Sing it now.';
+      detail = anyNote ? 'Sing "ah" on any easy note.' : slide ? (hits ? 'Your turn. Hit the notes.' : phrase ? 'Your turn. Sing the line.' : 'Your turn. Sing the slide.') : 'Sing it now.';
     } else {
       detail = anyNote ? 'Keep it steady.' : slide ? 'Keep the ball in the ring.' : howClose(reading);
     }
@@ -341,7 +346,9 @@ export function RunView({ run }: { run: Run }) {
               ? 'Match the volume'
               : anyNote
                 ? 'Your note'
-                : phrase
+                : hits
+                  ? 'Hit the notes'
+                  : phrase
                   ? 'Sing the line'
                   : slide
                     ? 'Follow the slide'
