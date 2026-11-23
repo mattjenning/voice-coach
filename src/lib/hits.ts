@@ -27,12 +27,12 @@ export const HIT_LEVELS: Record<
   Difficulty,
   { notes: number; shortestMs: number; longestMs: number; span: number; maxJump: number; turns: number }
 > = {
-  /** Four notes, a scale note apart, all one way, inside five notes. 0.5 to 1 second each. */
-  easy: { notes: 4, shortestMs: 500, longestMs: 1000, span: 5, maxJump: 1, turns: 0 },
-  /** Six notes, up to two scale notes apart, turning round once, across the octave. 0.3 to 0.8 seconds each. */
-  medium: { notes: 6, shortestMs: 300, longestMs: 800, span: 8, maxJump: 2, turns: 1 },
-  /** Eight notes, jumps of up to four, any direction, across the octave. 0.25 to 0.6 seconds each. */
-  hard: { notes: 8, shortestMs: 250, longestMs: 600, span: 8, maxJump: 4, turns: Infinity },
+  /** Four notes, a scale note apart, all one way, inside five notes. 0.5 to 1.1 seconds each (Matthew, 2026-11-23). */
+  easy: { notes: 4, shortestMs: 500, longestMs: 1100, span: 5, maxJump: 1, turns: 0 },
+  /** Six notes, up to two scale notes apart, turning round once, across the octave. 0.4 to 1.2 seconds each (Matthew). */
+  medium: { notes: 6, shortestMs: 400, longestMs: 1200, span: 8, maxJump: 2, turns: 1 },
+  /** Eight notes, jumps of up to four, any direction, across the octave. 0.3 to 1.3 seconds each (Matthew). */
+  hard: { notes: 8, shortestMs: 300, longestMs: 1300, span: 8, maxJump: 4, turns: Infinity },
 };
 
 /** Note lengths are whole twentieths of a second. */
