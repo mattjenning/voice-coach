@@ -309,7 +309,7 @@ export function RunView({ run }: { run: Run }) {
   }
 
   if (volume !== undefined) {
-    if (phase !== 'listening') detail = 'Listen to the note. Any note will do.';
+    if (phase !== 'listening') detail = 'Get ready. Any note will do.';
     else if (volume.kind === 'quiet') detail = 'Sing as softly as you can, and keep going.';
     else if (volume.kind === 'loud') detail = 'Sing loud, but stay comfortable.';
     else if (run.loudness === null) detail = 'Sing, and bring the ball into the band.';

@@ -122,6 +122,20 @@ function playToEnd(player: AudioPlayer, ms: number, done: () => void): () => voi
 }
 
 /**
+ * When the microphone stream was last turned off. Kept for the whole app,
+ * because a screen that closes and a screen that opens each have their own stream.
+ */
+let lastStopAt = 0;
+
+/**
+ * After the stream stops, expo-audio switches the phone's sound system off
+ * a tenth of a second later, and it does not notice a stream started in
+ * between. A stream started inside that window is cut off and hears nothing.
+ * So a new stream waits until the window has safely passed.
+ */
+const SETTLE_MS = 300;
+
+/**
  * Turn the microphone stream off if it is on.
  *
  * When a screen closes, the phone throws the stream away, sometimes before
@@ -130,7 +144,10 @@ function playToEnd(player: AudioPlayer, ms: number, done: () => void): () => voi
  */
 function stopStream(stream: AudioStream | null): void {
   try {
-    if (stream?.isStreaming) stream.stop();
+    if (stream?.isStreaming) {
+      stream.stop();
+      lastStopAt = Date.now();
+    }
   } catch {
     // Already released with its screen.
   }
@@ -192,6 +209,15 @@ export function usePitch(
 
   const playThenListen = useCallback(
     async (playing: Sound | null): Promise<RoundStart> => {
+      // No sound to play and the microphone is already on: leave it on. Turning
+      // it off and straight back on is what made every other step deaf.
+      if (playing === null && stream?.isStreaming && sound.current === null) {
+        run.current++;
+        framer.current?.reset();
+        smoother.current?.reset();
+        setStatus('on');
+        return 'listening';
+      }
       stop();
       const mine = run.current;
       const fail = (error: unknown): RoundStart => {
@@ -237,6 +263,13 @@ export function usePitch(
         } catch {
           // The sound has already gone.
         }
+      }
+
+      // Too soon after the last stream stopped, and the phone would switch this one off.
+      const wait = lastStopAt + SETTLE_MS - Date.now();
+      if (wait > 0) {
+        await new Promise((resolve) => setTimeout(resolve, wait));
+        if (mine !== run.current) return 'cancelled';
       }
 
       try {

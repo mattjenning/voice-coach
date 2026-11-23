@@ -69,11 +69,11 @@ const USUAL_LOUD_DB = -20;
 
 /**
  * Volume match: learn the singer's soft and loud, then five targets between.
- * The reference tone plays once, before the first step.
+ * No tone plays: any note will do, so the microphone comes on straight away.
  */
-export function volumeSteps(midi: number): Step[] {
-  const learn = (name: string, volume: Volume, tone: number | null): Step => ({
-    midi: tone,
+export function volumeSteps(): Step[] {
+  const learn = (name: string, volume: Volume): Step => ({
+    midi: null,
     holdMs: 0,
     listenMs: 3500,
     volume,
@@ -87,8 +87,8 @@ export function volumeSteps(midi: number): Step[] {
     name,
   });
   return [
-    learn('As soft as you can', { kind: 'quiet' }, midi),
-    learn('Loud, but comfortable', { kind: 'loud' }, null),
+    learn('As soft as you can', { kind: 'quiet' }),
+    learn('Loud, but comfortable', { kind: 'loud' }),
     match('Soft', 0.25),
     match('Loud', 0.75),
     match('Medium', 0.5),

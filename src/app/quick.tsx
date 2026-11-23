@@ -56,11 +56,14 @@ const LEVELS: { level: Difficulty; label: string }[] = [
   { level: 'hard', label: 'Hard' },
 ];
 
+/** Volume match plays no note, so its start is only a placeholder. */
+const ANY_NOTE = 48;
+
 const span = (start: number) => `${noteName(start)} to ${noteName(start + 12)}`;
 
 /** What one set is called on a report card. */
 function setTitle(mode: Mode, start: number, order: SlideOrder, level: Difficulty): string {
-  if (mode === 'volume') return `Volume match on ${noteName(start)}`;
+  if (mode === 'volume') return 'Volume match';
   if (mode === 'step') return `Steps, ${span(start)}`;
   const label = ORDERS.find((each) => each.order === order)?.label.toLowerCase() ?? order;
   return `Slides, ${level}, ${label}, ${span(start)}`;
@@ -87,27 +90,13 @@ export default function PracticeScreen() {
   const [level, setLevel] = useState<Difficulty>('easy');
 
   const everything = sets.flatMap((set) => set.results);
-
-  // Your best note: the plain note you have matched most closely this session.
-  // Before any set is finished, C3 stands in. Any note works for loudness.
-  let bestNote = 48;
-  let bestMiss = Infinity;
-  for (const result of everything) {
-    const plain = result.step.slide === undefined && result.step.phrase === undefined;
-    if (!plain || !result.matched || result.step.midi === null || result.closestCents === null) continue;
-    if (Math.abs(result.closestCents) < bestMiss) {
-      bestMiss = Math.abs(result.closestCents);
-      bestNote = result.sungMidi ?? result.step.midi;
-    }
-  }
-  bestNote = Math.min(84, Math.max(36, bestNote));
   const setCount = sets.length === 1 ? '1 set' : `${sets.length} sets`;
 
   const sing = (mode: Mode, start: number, slideOrder: SlideOrder) => {
     // Random slides are picked here, once, so the set does not change under the singer.
     const steps =
       mode === 'volume'
-        ? volumeSteps(start)
+        ? volumeSteps()
         : mode === 'step'
           ? scaleSteps(start)
           : slideSteps(start, slideOrder, level, Math.random);
@@ -172,7 +161,7 @@ export default function PracticeScreen() {
           onPress={() => setView({ name: 'session', back: view })}
         />
         {mode === 'volume' ? (
-          <Button primary label="Go again" onPress={() => sing('volume', bestNote, view.order)} />
+          <Button primary label="Go again" onPress={() => sing('volume', ANY_NOTE, view.order)} />
         ) : (
           <Card>
             <Label>Go again</Label>
@@ -266,18 +255,12 @@ export default function PracticeScreen() {
             detail={each.line}
             onPress={() =>
               each.mode === 'volume'
-                ? sing('volume', bestNote, order)
+                ? sing('volume', ANY_NOTE, order)
                 : setView({ name: 'choose', mode: each.mode })
             }
           />
         ))}
       </View>
-      <ThemedText type="small" themeColor="textSecondary">
-        Volume match starts on {noteName(bestNote)},{' '}
-        {bestMiss === Infinity
-          ? 'until you have matched a note this session.'
-          : 'the note you have matched most closely this session.'}
-      </ThemedText>
       {sets.length > 0 && (
         <Button
           label={`Session report card (${setCount})`}

@@ -596,9 +596,9 @@ assert.equal(currentStep(NO_RUN), null);
   assert.equal(loudnessShare(-35, -40, -38), 0.5, 'a tiny range is widened to ten decibels');
   assert.ok(loudnessShare(-30, null, null) > 0 && loudnessShare(-30, null, null) < 1);
 
-  const steps = volumeSteps(55);
+  const steps = volumeSteps();
   assert.deepEqual(steps.map(stepLabel), ['As soft as you can', 'Loud, but comfortable', 'Soft', 'Loud', 'Medium', 'Very loud', 'Very soft']);
-  assert.deepEqual(steps.map((step) => step.midi), [55, null, null, null, null, null, null], 'the tone plays once');
+  assert.deepEqual(steps.map((step) => step.midi), [null, null, null, null, null, null, null], 'no tone plays: it starts listening straight away');
 
   const loud = (run: Run, db: number | null, atMs: number) =>
     runReducer(run, { type: 'pitch', hz: db === null ? null : 196, atMs, db: db ?? -80 });
