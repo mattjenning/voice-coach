@@ -7,6 +7,7 @@ import { useTheme } from '@/hooks/use-theme';
 import {
   SLIDE_TOLERANCE_CENTS,
   VOLUME_TOLERANCE,
+  countdownDots,
   stepPath,
   timeLeftMs,
   type Path,
@@ -319,8 +320,12 @@ export function RunView({ run }: { run: Run }) {
     }
   }
 
+  // The countdown before a step: three dots, one going every third of a second.
+  const dots = countdownDots(run);
+  if (dots > 0) detail = Array.from({ length: dots }, () => '●').join(' ');
+
   let count = ' ';
-  if (phase === 'listening') {
+  if (phase === 'listening' && dots === 0) {
     count =
       slide && run.slideStartedAt === null
         ? 'The clock starts when you do.'
@@ -373,7 +378,7 @@ export function RunView({ run }: { run: Run }) {
       )}
 
       <View style={styles.under}>
-        <ThemedText style={styles.detail}>{detail}</ThemedText>
+        <ThemedText style={dots > 0 ? styles.dots : styles.detail}>{detail}</ThemedText>
         <View style={styles.between}>
           <ThemedText type="smallBold">
             {volume !== undefined && volume.kind !== 'match'
@@ -406,6 +411,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   target: Type.note,
+  /** The countdown dots, the same height as the words they stand in for. */
+  dots: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: 600,
+    letterSpacing: 6,
+  },
   /** A slide's name is three times as long as a note's, so it is set smaller and kept on one line. */
   slideTarget: Type.figure,
   sungBlock: {

@@ -72,7 +72,8 @@ export function ExercisePlayer({
   // Keep the countdown moving even if no sound arrives.
   useEffect(() => {
     if (phase !== 'listening') return;
-    const timer = setInterval(() => dispatch({ type: 'tick', atMs: Date.now() }), 250);
+    // Often enough for the countdown dots to go on time.
+    const timer = setInterval(() => dispatch({ type: 'tick', atMs: Date.now() }), 100);
     return () => clearInterval(timer);
   }, [phase]);
 

@@ -50,7 +50,12 @@ export type Step = {
   name?: string;
   /** Set for a loudness step: the singer is judged on how loud they sing, not on the note. */
   volume?: Volume;
+  /** A short countdown before listening starts. Nothing sung during it counts. */
+  countdownMs?: number;
 };
+
+/** How long the countdown before each Volume match step lasts. Shown as three dots. */
+export const COUNTDOWN_MS = 1000;
 
 /**
  * A loudness step. "quiet" and "loud" listen to the singer's softest and
@@ -78,6 +83,7 @@ export function volumeSteps(): Step[] {
     listenMs: 3500,
     volume,
     name,
+    countdownMs: COUNTDOWN_MS,
   });
   const match = (name: string, target: number): Step => ({
     midi: null,
@@ -85,6 +91,7 @@ export function volumeSteps(): Step[] {
     listenMs: 5000,
     volume: { kind: 'match', target },
     name,
+    countdownMs: COUNTDOWN_MS,
   });
   return [
     learn('As soft as you can', { kind: 'quiet' }),
@@ -264,6 +271,8 @@ export type Run = {
   turn: number;
   deadlineMs: number | null;
   clockMs: number | null;
+  /** While a step's countdown runs, when it ends. Null when there is none or it is over. */
+  countdownUntil: number | null;
   /** The pitch being sung right now, or null for silence. */
   hz: number | null;
   /** How the current pitch compares with the note. */
@@ -308,6 +317,7 @@ export type RunEvent =
 const STEP_START = {
   deadlineMs: null,
   clockMs: null,
+  countdownUntil: null,
   hz: null,
   reading: null,
   hold: NOT_HOLDING,
@@ -341,6 +351,25 @@ export const NO_RUN: Run = {
 /** The step in play, or null before the start and after the end. */
 export function currentStep(run: Run): Step | null {
   return run.phase === 'tone' || run.phase === 'listening' ? (run.steps[run.index] ?? null) : null;
+}
+
+/** True while the countdown before a step is still running. */
+export function countingDown(run: Run): boolean {
+  return (
+    run.phase === 'listening' &&
+    run.countdownUntil !== null &&
+    run.clockMs !== null &&
+    run.clockMs < run.countdownUntil
+  );
+}
+
+/** How many of the three countdown dots are left: 3, 2, 1, or 0 when it is over. */
+export function countdownDots(run: Run): number {
+  if (!countingDown(run) || run.countdownUntil === null || run.clockMs === null) return 0;
+  const step = run.steps[run.index];
+  const total = step?.countdownMs ?? COUNTDOWN_MS;
+  const left = run.countdownUntil - run.clockMs;
+  return Math.min(3, Math.max(1, Math.ceil((3 * left) / total)));
 }
 
 /** Milliseconds of listening left, or 0 when not listening. */
@@ -564,16 +593,22 @@ export function runReducer(run: Run, event: RunEvent): Run {
     case 'listen': {
       if (run.phase !== 'tone') return run;
       const step = run.steps[run.index];
+      const countdown = step.countdownMs ?? 0;
       return {
         ...run,
         phase: 'listening',
-        deadlineMs: event.atMs + step.listenMs,
+        countdownUntil: countdown > 0 ? event.atMs + countdown : null,
+        deadlineMs: event.atMs + countdown + step.listenMs,
         clockMs: event.atMs,
       };
     }
 
     case 'pitch': {
       if (run.phase !== 'listening' || run.deadlineMs === null) return run;
+      // Nothing sung during the countdown counts.
+      if (run.countdownUntil !== null && event.atMs < run.countdownUntil) {
+        return { ...run, clockMs: event.atMs };
+      }
       const step = run.steps[run.index];
       if (step.volume !== undefined) {
         const heard = hearVolume(run, step, step.volume, event.hz, event.db, event.atMs);

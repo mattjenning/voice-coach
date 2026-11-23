@@ -39,6 +39,8 @@ import {
   slideStep,
   stepPath,
   volumeSteps,
+  COUNTDOWN_MS,
+  countdownDots,
   runReducer,
   timeLeftMs,
   type Run,
@@ -597,6 +599,8 @@ assert.equal(currentStep(NO_RUN), null);
   assert.ok(loudnessShare(-30, null, null) > 0 && loudnessShare(-30, null, null) < 1);
 
   const steps = volumeSteps();
+  /** Every step opens with a countdown. Singing starts after it. */
+  const C = COUNTDOWN_MS;
   assert.deepEqual(steps.map(stepLabel), ['As soft as you can', 'Loud, but comfortable', 'Soft', 'Loud', 'Medium', 'Very loud', 'Very soft']);
   assert.deepEqual(steps.map((step) => step.midi), [null, null, null, null, null, null, null], 'no tone plays: it starts listening straight away');
 
@@ -612,28 +616,28 @@ assert.equal(currentStep(NO_RUN), null);
   let run = runReducer(NO_RUN, { type: 'start', steps });
   // Soft: -42. Loud: -18. Then the singer's range is 24 decibels wide.
   run = runReducer(run, { type: 'listen', atMs: 0 });
-  run = singAt(run, -42, 100, 4000);
+  run = singAt(run, -42, 100 + C, 4000);
   assert.equal(run.index, 1);
   assert.equal(run.quietDb, -42);
   assert.ok(run.results[0].matched);
   run = runReducer(run, { type: 'listen', atMs: 10_000 });
-  run = singAt(run, -18, 10_100, 4000);
+  run = singAt(run, -18, 10_100 + C, 4000);
   assert.equal(run.loudDb, -18);
   assert.equal(run.quietDb, -42, 'the soft reading is kept for the rest of the run');
 
   // "Soft" is a quarter of the way up: -36. Singing there for two seconds matches it.
   run = runReducer(run, { type: 'listen', atMs: 20_000 });
-  run = loud(run, -20, 20_100); // far too loud at first
+  run = loud(run, -20, 20_100 + C); // far too loud at first
   assert.ok((run.loudness ?? 0) > 0.9);
   assert.equal(run.hold.heldMs, 0);
-  run = singAt(run, -36, 20_200, 2100);
+  run = singAt(run, -36, 20_200 + C, 2100);
   assert.equal(run.index, 3, 'held in range, so it moved on');
   assert.ok(run.results[2].matched);
   assert.equal(noteScore(run.results[2]), 100);
 
   // "Loud" is three quarters up: -24. Singing at -33, well short, misses.
   run = runReducer(run, { type: 'listen', atMs: 30_000 });
-  run = singAt(run, -33, 30_100, 6000);
+  run = singAt(run, -33, 30_100 + C, 6000);
   assert.equal(run.index, 4);
   assert.ok(!run.results[3].matched);
   const short = noteScore(run.results[3]);
@@ -641,8 +645,8 @@ assert.equal(currentStep(NO_RUN), null);
 
   // "Medium": in range for one second, then silence. Partial credit.
   run = runReducer(run, { type: 'listen', atMs: 40_000 });
-  run = singAt(run, -30, 40_100, 1000);
-  run = singAt(run, null, 41_200, 5000);
+  run = singAt(run, -30, 40_100 + C, 1000);
+  run = singAt(run, null, 41_200 + C, 5000);
   assert.ok(!run.results[4].matched);
   assert.equal(run.results[4].heldMs, 1000);
   assert.equal(noteScore(run.results[4]), 75, 'spot on, held half the time');
@@ -650,12 +654,29 @@ assert.equal(currentStep(NO_RUN), null);
   // The edge of the range counts; just past it does not.
   const edge = 0.95 - VOLUME_TOLERANCE + 0.01; // "Very loud" is 0.95
   run = runReducer(run, { type: 'listen', atMs: 50_000 });
-  run = singAt(run, -42 + 24 * edge, 50_100, 2100);
+  run = singAt(run, -42 + 24 * edge, 50_100 + C, 2100);
   assert.ok(run.results[5].matched);
   run = runReducer(run, { type: 'listen', atMs: 60_000 });
-  run = singAt(run, -42 + 24 * (0.05 + VOLUME_TOLERANCE + 0.03), 60_100, 6000); // "Very soft" is 0.05
+  run = singAt(run, -42 + 24 * (0.05 + VOLUME_TOLERANCE + 0.03), 60_100 + C, 6000); // "Very soft" is 0.05
   assert.equal(run.phase, 'done');
   assert.ok(!run.results[6].matched);
+
+  // The countdown: three dots, then two, then one, then listening. Singing during it does not count.
+  {
+    let counting = runReducer(NO_RUN, { type: 'start', steps });
+    counting = runReducer(counting, { type: 'listen', atMs: 0 });
+    assert.equal(countdownDots(counting), 3);
+    counting = loud(counting, -42, 400);
+    assert.equal(countdownDots(counting), 2);
+    assert.deepEqual(counting.levels, [], 'singing during the countdown is not counted');
+    counting = runReducer(counting, { type: 'tick', atMs: 700 });
+    assert.equal(countdownDots(counting), 1);
+    counting = runReducer(counting, { type: 'tick', atMs: C });
+    assert.equal(countdownDots(counting), 0);
+    counting = loud(counting, -42, C + 100);
+    assert.equal(counting.levels.length, 1, 'after the countdown it listens');
+    assert.equal(counting.deadlineMs, C + 3500, 'the countdown does not eat into the listening time');
+  }
 
   const card = summarize(run.results);
   assert.equal(card.attempted, 7);
@@ -665,7 +686,7 @@ assert.equal(currentStep(NO_RUN), null);
   // Silence while learning the range: nothing is learned, and the usual range stands in.
   let quiet = runReducer(NO_RUN, { type: 'start', steps });
   quiet = runReducer(quiet, { type: 'listen', atMs: 0 });
-  quiet = runReducer(quiet, { type: 'tick', atMs: 4000 });
+  quiet = runReducer(quiet, { type: 'tick', atMs: 4000 + C });
   assert.equal(quiet.index, 1);
   assert.equal(quiet.quietDb, null);
   assert.ok(!quiet.results[0].matched);
