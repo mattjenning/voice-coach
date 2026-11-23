@@ -7,7 +7,8 @@
  * Slide mode, the singer's turn starts on cue after a one-second countdown.
  *
  * Difficulty sets three things: how far the notes spread, which way they
- * go, and how long each one lasts.
+ * go, and how long the notes may last. Within that, each note gets its own
+ * random length, so a run has a rhythm and is not an even tick.
  *
  * Pure logic.
  */
@@ -24,15 +25,18 @@ import type { Difficulty } from './slide.ts';
  */
 export const HIT_LEVELS: Record<
   Difficulty,
-  { notes: number; noteMs: number; span: number; maxJump: number; turns: number }
+  { notes: number; shortestMs: number; longestMs: number; span: number; maxJump: number; turns: number }
 > = {
-  /** Four notes, a scale note apart, all one way, inside five notes. 0.75 seconds each. */
-  easy: { notes: 4, noteMs: 750, span: 5, maxJump: 1, turns: 0 },
-  /** Six notes, up to two scale notes apart, turning round once, across the octave. Half a second each. */
-  medium: { notes: 6, noteMs: 500, span: 8, maxJump: 2, turns: 1 },
-  /** Eight notes, jumps of up to four, any direction, across the octave. 0.4 seconds each. */
-  hard: { notes: 8, noteMs: 400, span: 8, maxJump: 4, turns: Infinity },
+  /** Four notes, a scale note apart, all one way, inside five notes. 0.5 to 1 second each. */
+  easy: { notes: 4, shortestMs: 500, longestMs: 1000, span: 5, maxJump: 1, turns: 0 },
+  /** Six notes, up to two scale notes apart, turning round once, across the octave. 0.3 to 0.8 seconds each. */
+  medium: { notes: 6, shortestMs: 300, longestMs: 800, span: 8, maxJump: 2, turns: 1 },
+  /** Eight notes, jumps of up to four, any direction, across the octave. 0.25 to 0.6 seconds each. */
+  hard: { notes: 8, shortestMs: 250, longestMs: 600, span: 8, maxJump: 4, turns: Infinity },
 };
+
+/** Note lengths are whole twentieths of a second. */
+const LENGTH_STEP_MS = 50;
 
 /** How many runs make a set. */
 export const HIT_RUNS = 5;
@@ -79,14 +83,19 @@ function drawRun(level: Difficulty, random: () => number): number[] {
 
 /** The runs of one set, on the major scale that starts on `start`. */
 export function hitSteps(start: number, level: Difficulty, random: () => number): Step[] {
-  const { noteMs } = HIT_LEVELS[level];
+  const { shortestMs, longestMs } = HIT_LEVELS[level];
+  const choices = (longestMs - shortestMs) / LENGTH_STEP_MS + 1;
+  const length = () => shortestMs + LENGTH_STEP_MS * Math.floor(random() * choices);
   const steps: Step[] = [];
   let last = '';
   while (steps.length < HIT_RUNS) {
     let places = drawRun(level, random);
     for (let tries = 0; tries < 10 && places.join() === last; tries++) places = drawRun(level, random);
     last = places.join();
-    const notes: PhraseNote[] = places.map((place) => ({ midi: start + MAJOR_SCALE[place], ms: noteMs }));
+    const notes: PhraseNote[] = places.map((place) => ({
+      midi: start + MAJOR_SCALE[place],
+      ms: length(),
+    }));
     const name = notes.map((note) => noteName(note.midi)).join(' ');
     steps.push({ ...phraseStep(name, notes), countdownMs: COUNTDOWN_MS, onCue: true });
   }

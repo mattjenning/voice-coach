@@ -653,8 +653,12 @@ assert.equal(currentStep(NO_RUN), null);
     let lowest = 99;
     let highest = -1;
     const firsts = new Set<number>();
+    const lengths = new Set<number>();
+    let uneven = 0;
+    let runs = 0;
     for (let seed = 1; seed <= 40; seed++) {
       const set = hitSteps(48, level, seeded(seed));
+      runs += set.length;
       assert.equal(set.length, HIT_RUNS);
       for (const each of set) {
         const notes = each.phrase!;
@@ -663,7 +667,12 @@ assert.equal(currentStep(NO_RUN), null);
         assert.equal(notes.length, rule.notes, `${level} runs have ${rule.notes} notes`);
         const places = notes.map((note) => place(note.midi));
         assert.ok(places.every((p) => p >= 0), 'every note is on the scale');
-        assert.ok(notes.every((note) => note.ms === rule.noteMs), `${level} notes last ${rule.noteMs} ms`);
+        assert.ok(
+          notes.every((note) => note.ms >= rule.shortestMs && note.ms <= rule.longestMs && note.ms % 50 === 0),
+          `${level} notes last ${rule.shortestMs} to ${rule.longestMs} ms`,
+        );
+        notes.forEach((note) => lengths.add(note.ms));
+        if (new Set(notes.map((note) => note.ms)).size > 1) uneven++;
         assert.ok(Math.max(...places) - Math.min(...places) < rule.span, `${level} stays inside ${rule.span} notes`);
         let changes = 0;
         for (let i = 1; i < places.length; i++) {
@@ -678,14 +687,16 @@ assert.equal(currentStep(NO_RUN), null);
         firsts.add(places[0]);
         // The whole run is the notes, one after another.
         const path = stepPath(each)!;
-        assert.equal(path.totalMs, rule.notes * rule.noteMs);
-        assert.equal(path.midiAt(rule.noteMs * 1.5), notes[1].midi);
+        assert.equal(path.totalMs, notes.reduce((sum, note) => sum + note.ms, 0));
+        assert.equal(path.midiAt(notes[0].ms + notes[1].ms / 2), notes[1].midi);
       }
     }
     assert.equal(biggest, rule.maxJump, `${level} uses its biggest jump`);
     assert.equal(lowest, 0, `${level} reaches the bottom`);
     assert.equal(highest, 7, `${level} reaches the top`);
     assert.ok(firsts.size >= 5, `${level} runs start on many notes`);
+    assert.ok(lengths.has(rule.shortestMs) && lengths.has(rule.longestMs), `${level} uses its whole range of lengths`);
+    assert.ok(uneven > runs * 0.9, `${level}: nearly every run mixes note lengths (${uneven} of ${runs})`);
   }
   assert.notDeepEqual(
     hitSteps(48, 'medium', seeded(1)).map(stepLabel),

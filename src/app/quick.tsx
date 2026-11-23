@@ -250,9 +250,10 @@ export default function PracticeScreen() {
             <Label>How hard</Label>
             {levelButtons}
             <ThemedText type="small" themeColor="textSecondary">
-              Easy: four notes, each 0.75 seconds, a scale note apart, all one way, inside five
-              notes. Medium: six half-second notes, up to two apart, turning round once, across the
-              octave. Hard: eight notes of 0.4 seconds, jumps up to four, any direction.
+              Every note has its own length. Easy: four notes of 0.5 to 1 second, a scale note
+              apart, all one way, inside five notes. Medium: six notes of 0.3 to 0.8 seconds, up to
+              two apart, turning round once, across the octave. Hard: eight notes of 0.25 to 0.6
+              seconds, jumps up to four, any direction.
             </ThemedText>
           </Card>
         )}
