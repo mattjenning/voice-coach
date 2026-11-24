@@ -130,7 +130,7 @@ export default function ProgressionScreen() {
     <Screen
       back
       title="Progression"
-      subtitle="Guided practice from your first note. Each level trains one thing and opens the next.">
+      subtitle="Fifteen levels from your first note, easy to hard. Each trains one thing and opens the next.">
       {!loaded ? (
         <ThemedText themeColor="textSecondary">Loading your progress.</ThemedText>
       ) : (

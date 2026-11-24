@@ -10,9 +10,29 @@ Everything in the app is built from one move. The app plays a note for three sec
 
 | Mode | What it does | State |
 | --- | --- | --- |
-| Quick practice | Four kinds of practice, each ending in a report card with a percent score and a letter grade. **Scale mode** (called Step mode until 2026-11-23): eight notes up a major scale from one of six starting notes, one attempt each. **Slide mode:** seven glides, rising, falling or random, at three difficulties. The app plays each glide first while a ring rides its path; on your turn, after a one-second countdown of three dots, the ring sets off at once and a ball shows your voice against it. Each slide starts on its own note and has its own speed and lead-in. **Hit the Notes:** five short runs of solid notes on the scale; the app plays each run, then after the countdown you sing it back note for note. Each note gets its own random length within the level's range. Easy: four notes of 0.5 to 1.1 seconds, one scale note apart, all one way, inside five notes. Medium: six notes of 0.4 to 1.2 seconds, up to two apart, turning once, across the octave. Hard: eight notes of 0.3 to 1.3 seconds, jumps of up to four, any direction. **Volume match:** no note plays; the microphone comes on straight away, and each step opens with the same countdown. The app learns your softest and loudest singing, then asks for five loudness targets between them. | Scale and Slide have run on a phone. The on-cue start and varied slides, and all of Hit the Notes, have not been tried on a phone (2026-11-23). Volume match ran on a phone on 2026-11-23 but was unreliable; the fix has not been tried on a phone. |
-| Progression | Ten guided levels. Level 1 finds your home note, the note you sing when asked for an easy one. Every later level is built from it. Levels train pitch matching, steps, jumps, range and breath control. Progress and achievements are saved on the phone. | Built. Not yet run on a phone. |
+| Today's practice | The big button on the start screen. One guided session of about three minutes, built around your home note: a five-note warm-up, three runs of notes, four slides and one long note. The runs and slides are different every day and set their own difficulty: 90% or better moves that part up a level next time, under 70% moves it down. Finishing a session counts a day toward a streak. A first-time singer finds their home note here first. | Built 2026-11-24. Not yet run on a phone. |
+| Free practice (called Quick practice until 2026-11-24) | Four kinds of practice, each ending in a report card with a percent score and a letter grade. **Scale mode** (called Step mode until 2026-11-23): eight notes up a major scale from one of six starting notes, one attempt each. **Slide mode:** seven glides, rising, falling or random, at three difficulties. The app plays each glide first while a ring rides its path; on your turn, after a one-second countdown of three dots, the ring sets off at once and a ball shows your voice against it. Each slide starts on its own note and has its own speed and lead-in. **Hit the Notes:** five short runs of solid notes on the scale; the app plays each run, then after the countdown you sing it back note for note. Each note gets its own random length within the level's range. Easy: four notes of 0.5 to 1.1 seconds, one scale note apart, all one way, inside five notes. Medium: six notes of 0.4 to 1.2 seconds, up to two apart, turning once, across the octave. Hard: eight notes of 0.3 to 1.3 seconds, jumps of up to four, any direction. **Volume match:** no note plays; the microphone comes on straight away, and each step opens with the same countdown. The app learns your softest and loudest singing, then asks for five loudness targets between them. | Scale and Slide have run on a phone. The on-cue start and varied slides, and all of Hit the Notes, have not been tried on a phone (2026-11-23). Volume match ran on a phone on 2026-11-23 but was unreliable; the fix has not been tried on a phone. |
+| Progression | Fifteen guided levels, ordered easy to hard by what studies of singing found (see "What makes a line hard"). Level 1 finds your home note, the note you sing when asked for an easy one. Every later level is built from it. Levels go from one note, to notes near home, to two notes in a row, to four-note patterns, the octave, jumps, slides, long holds, the ends of your range, and last quick lines with wide jumps. Progress and achievements are saved on the phone. | The first ten levels ran on a phone and save their progress (2026-11-23). The five new ones (Notes near home, Two notes in a row, Four-note patterns, Slides, Leaping lines) have not been tried on a phone. |
 | Song mode | Amazing Grace, a line at a time. The app plays a line, you sing it back, and it scores how much was on the notes and in time. Three clean passes master a line. Mastery is saved on the phone. | Ran once on a phone, 2026-11-16, with two faults: line 1 was cut off on its last note, and no ball followed the voice. Both have fixes that have not been tried on a phone. |
+
+Every report card for a single set now opens with one line from the coach, "Try next": the single most useful thing to change, such as "You sang a little flat, about 30 cents under" or "The high notes cost you most". In Free practice, a slide or Hit the Notes set that scores 90% or better offers the next difficulty up, and one that does not pass offers the one below. Where your home note is known, the list of starting notes opens with "Your voice", the octave around it.
+
+## What makes a line hard
+
+Worked out from published studies on 2026-11-24. This is what the levels and difficulties are built on.
+
+| What changes | Effect | Source |
+| --- | --- | --- |
+| How many different notes | The biggest effect measured. Untrained adults sang 74% of single notes within half a semitone, 60% of two-note sequences and 46% of four-note patterns. | Demorest and Pfordresher 2015, *Music Perception* 32(3) |
+| How far from your comfortable note | Weaker singers drift back toward it: flat above it, sharp below it. | Pfordresher and Brown 2007, *Music Perception* 25(2) |
+| How big the jumps are | Everyone shrinks jumps: good singers by about 12%, weak singers by about 31%. A bigger jump lands further off. | Pfordresher and Brown 2007 |
+| A moving pitch | A steady glide was followed about 15 cents less exactly than a still note. | Dai and Dixon 2016, ISMIR |
+| How short the notes are | A sung note starts with an unsteady scoop that usually lasts more than 0.2 seconds, so a very short note is mostly scoop. Longer notes were slightly more accurate. | Dai and Dixon 2016 |
+| Which way the line turns | Very little. Good and weak singers alike got the direction right 92% of the time. | Pfordresher and Brown 2007 |
+
+Two more findings shaped the design. Seeing your pitch on screen while you sing was the only kind of 20-minute training that gave a significant gain in adults who sing off pitch (Berglin, Pfordresher and Demorest 2022, *Psychology of Music* 50(4)), which is what the pitch field and the ball already do. And practising across a full octave helped more than practising inside five notes (Pfordresher and Greenspon 2025, *Musicae Scientiae* 29(2)), which is why sets span the octave around the home note. Both studies were read as abstracts only.
+
+Not confirmed from a source this session, so treated as a working rule and not a fact: that learning is fastest at roughly 85% success. The 70% to 90% band for moving difficulty up and down is Claude's own choice in that spirit.
 
 ## Run it
 
@@ -41,7 +61,8 @@ The check builds every note from C2 to C6 as four kinds of tone (pure, voice-lik
 
 | Path | What it holds |
 | --- | --- |
-| `src/app/index.tsx` | The start screen: three modes |
+| `src/app/index.tsx` | The start screen: Today's practice, then three modes |
+| `src/app/today.tsx` | Today's practice: the guided daily session |
 | `src/app/quick.tsx`, `progression.tsx`, `song.tsx` | One screen per mode |
 | `src/components/exercise-player.tsx` | Runs an exercise from first step to last: tone, listen, next tone |
 | `src/components/run-view.tsx` | What a running exercise looks like: the note, the meter, the hold bar |
@@ -54,6 +75,8 @@ The check builds every note from C2 to C6 as four kinds of tone (pure, voice-lik
 | `src/hooks/slide-sounds.ts` | Saves the sound of a slide or phrase on the phone and plays it |
 | `src/hooks/use-passes.ts` | Saves Song mode's clean passes on the phone |
 | `src/lib/progression.ts` | Progression: the levels, the pass marks, the achievements |
+| `src/lib/daily.ts` | Today's practice: the sets, the self-adjusting difficulty, the streak |
+| `src/lib/coach.ts` | The coach's line: one thing to try next, from a finished set |
 | `src/lib/report.ts` | What a list of results adds up to |
 | `src/lib/pitch.ts` | Pitch detection (the YIN method) and smoothing. Pure maths. |
 | `src/lib/notes.ts` | Notes, frequencies and cents. Pure maths. |
@@ -64,6 +87,7 @@ The check builds every note from C2 to C6 as four kinds of tone (pure, voice-lik
 | `src/hooks/use-pitch.ts` | The only file that touches the microphone. Plays the tone, then listens. |
 | `src/hooks/tone-players.ts` | Keeps one sound player per reference tone |
 | `src/hooks/use-progress.ts` | Saves progression progress on the phone |
+| `src/hooks/use-daily.ts` | Saves the streak and the daily difficulty on the phone |
 | `src/data/tones.ts`, `assets/tones/` | Reference tones, one per note. Generated by `scripts/make-tones.mts`. |
 | `scripts/melody.mts` | Command line: a WAV of one voice in, a melody map out |
 | `scripts/check.mts` | Checks for everything under `src/lib` |
@@ -107,6 +131,11 @@ Matthew set the direction on 2026-11-16: dark with yellow over a light version a
 - **The ball holds through short breaks.** Sung words break the voice at every consonant and breath. On a slide or a song line the ball stays at the last pitch heard for 0.3 seconds, so it does not blink out at each one. Only real readings are scored.
 - **Song mode is call and response.** The phone cannot play and listen at once, so the app sings a line and then the singer does. A line's clock starts when the singer starts.
 - **Loudness is measured against the singer's own range.** How loud a phone hears you depends on the phone and how far away it is, so Volume match first listens to your softest and loudest singing and sets its targets between them.
+- **A new note gets 0.2 seconds to settle** (2026-11-24). In a run of notes or a song line, a reading that is off the note during the first 0.2 seconds of that note is left out of the score; one that is already on the note still counts. A voice scoops into a note before it steadies, and that scoop usually lasts more than 0.2 seconds (Dai and Dixon 2016). Without this, the shortest notes in Hit the Notes could not be scored fairly. It makes Hit the Notes and Song mode a little more forgiving than before.
+- **One tip, after the set.** The coach's line gives a single instruction when the set is over, never during it.
+- **Difficulty follows the singer.** In Today's practice the runs and slides move up after 90% or better and down after a score under 70%, so most sets are passed but few are perfect.
+- **The streak counts days, not sessions,** in the phone's own time. It holds through the day after the last session and is gone once a whole day is missed. The longest streak is kept.
+- **A passed level stays open** even when a new level is added in front of it.
 - **Missed notes earn partial credit.** A matched note scores 100. A missed one gets up to 50 for how close the best attempt came (full marks on the note, nothing a semitone away) and up to 50 for how much of the hold was done in tune. The set's score is the average, graded on the school scale: A from 90, B from 80, C from 70, D from 60. A C or better passes. The grade sits on a block colored by the grade: green for an A, yellow for a B, orange for a C, red for a D or an F. A Progression level is passed by its pass mark or by a C or better; finding the home note still needs a matched note.
 - **"One note" is one semitone**, the next piano key. That is how singers walk a warm-up scale up and down.
 - **Round timings came from trying it** (Matthew, 2026-11-16): a 3 second tone, 3.5 seconds of listening, 2 seconds held.
@@ -125,6 +154,9 @@ These need a real iPhone and have not been tried:
 4. Progression. It has not been tried on a phone.
 5. How accurate the detector is on a real voice. A real set scored 92% on a phone, but nobody has checked a reading against a tuner.
 6. That progress and mastery are still there after the app is closed and opened again.
+7. Today's practice, start to finish, and that its streak is still there the next day (2026-11-24).
+8. The five new Progression levels, the coach's line on a report card, and the step-up and ease-off offers in Free practice (2026-11-24).
+9. Whether the 0.2 second settling time feels fair or too generous on a real voice (2026-11-24).
 
 ## Before beta
 
@@ -135,6 +167,7 @@ The app goes to beta testers when every line here is true. Today it is not.
 - [ ] Progression has run start to finish on a phone, and its progress survives closing the app.
 - [ ] Volume match has run start to finish on a phone.
 - [ ] Hit the Notes has run start to finish on a phone.
+- [ ] Today's practice has run start to finish on a phone, and its streak survives closing the app.
 - [ ] Song mode has run start to finish on a phone, and its mastery survives closing the app.
 - [ ] A second person has tried it, ideally with a higher voice than Matthew's.
 - [x] The app has its own icon (2026-11-21): a tangerine voice line that settles into a yellow held note, on indigo. Source: `assets/images/icon-source.svg`. It shows on the home screen only in a real build, not in Expo Go.
@@ -147,6 +180,6 @@ The app goes to beta testers when every line here is true. Today it is not.
 1. **Prove this build on a phone.** The items above.
 2. **Beta.** The checklist above.
 3. **Your own song.** Song mode plays one built-in tune. Next: turn a song the singer owns into lines the same way. The melody script handles a voice on its own; lifting a voice out of a full song with instruments is not researched and decides which songs can be used.
-4. **More of Progression.** Slides across the bridge, loud and soft on one note, and lines from real songs. The pieces now exist in Quick practice and Song mode.
+4. **More of Progression.** Slides across the bridge, loud and soft on one note, and lines from real songs. The pieces now exist in Free practice and Song mode.
 
 Songs from streaming services cannot be analyzed, because their playback is protected. The first route is songs owned as files. Selling an app built on the melodies of commercial songs would likely need the rights cleared first; personal use does not.

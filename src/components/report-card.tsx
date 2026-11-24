@@ -4,6 +4,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Card, Label } from '@/components/ui';
 import { Spacing, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { advice } from '@/lib/coach';
 import type { StepResult } from '@/lib/exercise';
 import { HOLD } from '@/lib/hold';
 import { formatCents, noteName } from '@/lib/notes';
@@ -90,7 +91,8 @@ function NoteRows({ results }: { results: StepResult[] }) {
 
 /**
  * A report card for a list of results: one set, or a whole session.
- * With `notes` on, it also lists every note.
+ * With `notes` on, it also lists every note, and opens the list with the
+ * coach's line: the one thing to try next.
  */
 export function ReportCard({
   title,
@@ -106,6 +108,7 @@ export function ReportCard({
   const letter = grade(summary);
   const range = rangeSize(summary);
   const miss = summary.averageOffCents === null ? null : Math.round(summary.averageOffCents);
+  const tip = notes ? advice(results) : null;
   return (
     <Card>
       <Label>{title}</Label>
@@ -135,6 +138,14 @@ export function ReportCard({
           />
         </View>
       </View>
+      {tip !== null && (
+        <View style={[styles.tip, { borderLeftColor: theme.tune }]}>
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            Try next
+          </ThemedText>
+          <ThemedText>{tip}</ThemedText>
+        </View>
+      )}
       {notes && <NoteRows results={results} />}
     </Card>
   );
@@ -159,6 +170,11 @@ const styles = StyleSheet.create({
   score: {
     ...Type.figure,
     fontVariant: ['tabular-nums'],
+  },
+  tip: {
+    borderLeftWidth: 4,
+    paddingLeft: Spacing.three,
+    gap: Spacing.half,
   },
   fact: {
     flexDirection: 'row',

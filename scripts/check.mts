@@ -64,6 +64,21 @@ import { MAJOR_SCALE, SHIFTS, STARTS, canShift, canStartOn, scaleSteps } from '.
 import { grade, isPassing, noteScore, rangeSize, summarize } from '../src/lib/report.ts';
 import { DIFFICULTY, pathSound, slideSteps, stepLabel } from '../src/lib/slide.ts';
 import { HIT_LEVELS, HIT_RUNS, hitSteps } from '../src/lib/hits.ts';
+import { advice } from '../src/lib/coach.ts';
+import {
+  DAILY_RUNS,
+  DAILY_SLIDES,
+  NEW_DAILY,
+  dailySets,
+  dayKey,
+  doneToday,
+  finishDay,
+  holdSeconds,
+  nextDifficulty,
+  parseDaily,
+  streakNow,
+} from '../src/lib/daily.ts';
+import { voiceStart } from '../src/lib/quick.ts';
 import {
   AMAZING_GRACE,
   PASSES_TO_MASTER,
@@ -881,10 +896,18 @@ assert.equal(currentStep(NO_RUN), null);
   assert.ok(isClean(perfect));
   const octaveDown = singLine(0, (t) => path.midiAt(t) - 12);
   assert.equal(octaveDown.score, 100, 'a low voice sings it an octave down');
-  // A fifth of a second behind the beat loses the start of every note, but not the line.
-  const dragging = singLine(0, (t) => path.midiAt(Math.max(0, t - 200)));
+  // A voice needs an instant to settle on each new note, so up to a fifth of a
+  // second late on every note costs nothing.
+  const settlingIn = singLine(0, (t) => path.midiAt(Math.max(0, t - 200)));
+  assert.equal(settlingIn.score, 100, 'the first 0.2 seconds of a note forgive a late arrival');
+  // Twice as far behind the beat loses the start of every note, but not the line.
+  const dragging = singLine(0, (t) => path.midiAt(Math.max(0, t - 400)));
   assert.ok((dragging.score ?? 0) >= 70 && (dragging.score ?? 0) < 100, `dragging scored ${dragging.score}`);
   assert.ok(isClean(dragging));
+  // The direction of the misses is kept: a quarter of a semitone flat all the way through.
+  const flat = singLine(0, (t) => path.midiAt(t) - 0.25);
+  assert.ok(Math.abs((flat.biasCents ?? 0) + 25) < 1, `flat by ${flat.biasCents}`);
+  assert.ok(Math.abs(perfect.biasCents ?? 99) < 1);
   // One wrong note in nine is still clean. Droning on the first note is not.
   const oneWrong = singLine(0, (t) => (t >= 3500 && t < 4200 ? 72 : path.midiAt(t)));
   assert.ok(isClean(oneWrong) && (oneWrong.score ?? 0) < 100);
@@ -1089,7 +1112,17 @@ for (const shift of SHIFTS) assert.ok(shift.spoken.length > 0 && shift.label.spl
   progress = pass(progress, 'octave');
   assert.equal(progress.highestSung, 62);
   assert.ok(earned(progress).includes('Full octave') && earned(progress).includes('Octave range'));
+  // A singer who passed the old ten levels still has the five new ones to do, and
+  // the first of them is what comes next. Nothing already passed is lost.
   for (const id of ['jumps', 'hold-10', 'reach-down', 'reach-up']) progress = pass(progress, id);
+  assert.equal(progress.passed.length, 10);
+  assert.equal(nextLevel(progress)?.id, 'near-home');
+  const old = { ...NEW_PROGRESS, home: 50, passed: ['home', 'match', 'three-up'] };
+  const levelOf = (id: string) => LEVELS.find((level) => level.id === id)!;
+  assert.ok(isOpen(old, levelOf('three-up')), 'a passed level stays open behind a new one');
+  assert.ok(isOpen(old, levelOf('five-up-back')) && !isOpen(old, levelOf('two-notes')));
+  assert.ok(isOpen(progress, LEVELS.find((level) => level.id === 'near-home')!));
+  for (const id of ['near-home', 'two-notes', 'patterns', 'slides', 'leaps']) progress = pass(progress, id);
   assert.equal(nextLevel(progress), null, 'every level can be passed');
   assert.equal(earned(progress).length, achievements(progress).length);
   assert.deepEqual(parseProgress(JSON.stringify(progress)), progress, 'progress survives saving');
@@ -1212,6 +1245,192 @@ function sing(
   assert.equal(split[0].endMs - split[0].startMs, 7 * step);
 
   assert.ok(trackPitch(sung, 48_000).stepMs === 32);
+}
+
+{
+  // The new Progression levels (2026-11-24): the order follows what makes singing harder.
+  const ids = LEVELS.map((level) => level.id);
+  assert.equal(LEVELS.length, 15);
+  const before = (a: string, b: string) => assert.ok(ids.indexOf(a) < ids.indexOf(b), `${a} comes before ${b}`);
+  before('match', 'near-home'); // one note at home, then one note away from home
+  before('near-home', 'two-notes'); // one note, then two
+  before('two-notes', 'patterns'); // two notes, then four
+  before('patterns', 'slides'); // still notes, then a moving one
+  before('jumps', 'leaps'); // jumps one at a time, then jumps inside a quick line
+  assert.equal(ids[ids.length - 1], 'leaps', 'the hardest level is last');
+
+  const steps = (id: string) => LEVELS.find((level) => level.id === id)!.steps(60);
+  assert.deepEqual(steps('near-home').map((step) => step.midi), [62, 58, 64, 57]);
+  // A run of notes is one step, sung on cue after the three dots, a second a note.
+  const pairs = steps('two-notes');
+  assert.deepEqual(pairs.map((step) => step.phrase!.map((note) => note.midi)), [[60, 62], [60, 64], [64, 60]]);
+  assert.ok(pairs.every((step) => step.onCue === true && step.countdownMs === COUNTDOWN_MS));
+  assert.equal(stepLabel(pairs[0]), 'C4 D4');
+  assert.equal(stepPath(pairs[0])!.totalMs, 2000);
+  // Each rung asks for more notes, less time on each, or a wider spread.
+  const shape = (id: string) => {
+    const lines = steps(id).map((step) => step.phrase!);
+    return {
+      notes: lines[0].length,
+      ms: lines[0][0].ms,
+      spread: Math.max(...lines.flat().map((note) => note.midi)) - Math.min(...lines.flat().map((note) => note.midi)),
+    };
+  };
+  assert.deepEqual(shape('two-notes'), { notes: 2, ms: 1000, spread: 4 });
+  assert.deepEqual(shape('patterns'), { notes: 4, ms: 800, spread: 7 });
+  assert.deepEqual(shape('leaps'), { notes: 5, ms: 600, spread: 12 });
+  // The slides level: short slides first, then a fifth each way.
+  assert.deepEqual(steps('slides').map(stepLabel), ['C4 → D4', 'E4 → C4', 'C4 → G4', 'G4 → C4']);
+
+  // Singing a pattern level through, on the notes, passes it.
+  const patterns = LEVELS.find((level) => level.id === 'patterns')!;
+  let run = runReducer(NO_RUN, { type: 'start', steps: patterns.steps(60) });
+  let at = 0;
+  while (run.phase !== 'done') {
+    run = runReducer(run, { type: 'listen', atMs: at });
+    const path = stepPath(run.steps[run.index])!;
+    const from = at + COUNTDOWN_MS;
+    const index = run.index;
+    for (let t = 0; run.phase === 'listening' && run.index === index; t += 50) {
+      run = hear(run, hzOf(path.midiAt(t)), from + t);
+      at = from + t;
+    }
+    at += 1000;
+  }
+  assert.equal(run.results.length, 4);
+  assert.ok(run.results.every((result) => result.score === 100), 'a clean pattern scores 100');
+  assert.ok(didPass(patterns, run.results));
+}
+
+{
+  // The start for "Your voice": the octave from five keys under the home note.
+  assert.equal(voiceStart(50), 45);
+  assert.ok(canStartOn(voiceStart(usableHome(0))) && canStartOn(voiceStart(usableHome(127))));
+  assert.equal(voiceStart(38), 45, 'too low moves up an octave');
+  assert.equal(voiceStart(80), 63, 'too high moves down an octave');
+}
+
+{
+  // The coach's line: one thing to try next.
+  const note = (midi: number, matched: boolean, cents: number | null, heldMs = 0): StepResult => ({
+    step: noteStep(midi),
+    matched,
+    closestCents: cents,
+    sungMidi: cents === null ? null : midi,
+    heldMs: matched ? 2000 : heldMs,
+  });
+  assert.equal(advice([]), null);
+  assert.equal(advice(volumeSteps().map((step) => ({ step, matched: true, closestCents: null, sungMidi: null, heldMs: 0, score: 100 }))), null, 'nothing to say about loudness');
+  assert.match(advice([note(60, false, null), note(62, false, null)])!, /did not hear/);
+  assert.match(advice([60, 62, 64, 65].map((midi) => note(midi, true, 3)))!, /harder/);
+  // Low notes matched, high notes missed.
+  assert.match(
+    advice([note(60, true, 2), note(62, true, 2), note(69, false, -70), note(71, false, -80)])!,
+    /high notes/,
+  );
+  assert.match(
+    advice([note(60, false, 70), note(62, false, 80), note(69, true, 2), note(71, true, 2)])!,
+    /low notes/,
+  );
+  // Evenly flat, or evenly sharp, across the set.
+  assert.match(advice([60, 62, 64, 65].map((midi) => note(midi, false, -40, 500)))!, /flat, about 40 cents/);
+  assert.match(advice([60, 62, 64, 65].map((midi) => note(midi, false, 35, 500)))!, /sharp, about 35 cents/);
+  // On the notes but not held.
+  assert.match(advice([60, 62, 64, 65].map((midi) => note(midi, false, 5, 900)))!, /let them go/);
+  // A run of notes carries its own lean.
+  const line: StepResult = {
+    step: hitSteps(48, 'easy', seeded(1))[0],
+    matched: false,
+    closestCents: 45,
+    sungMidi: 48,
+    heldMs: 0,
+    score: 55,
+    biasCents: -45,
+  };
+  assert.match(advice([line, line])!, /flat, about 45 cents/);
+  // Finding the home note has no note to be off from.
+  assert.equal(advice([{ step: LEVELS[0].steps(0)[0], matched: true, closestCents: 0, sungMidi: 50, heldMs: 2000 }]), null);
+}
+
+{
+  // Today's practice: the self-adjusting difficulty.
+  assert.equal(nextDifficulty('easy', 90), 'medium');
+  assert.equal(nextDifficulty('medium', 95), 'hard');
+  assert.equal(nextDifficulty('hard', 100), 'hard');
+  assert.equal(nextDifficulty('medium', 89), 'medium', 'passing but not perfect stays put');
+  assert.equal(nextDifficulty('medium', 70), 'medium');
+  assert.equal(nextDifficulty('medium', 69), 'easy');
+  assert.equal(nextDifficulty('easy', 10), 'easy');
+  assert.equal(nextDifficulty('hard', null), 'hard');
+
+  // Days are counted in the phone's own time.
+  assert.equal(dayKey(new Date(2026, 10, 24, 23, 59)), '2026-11-24');
+  assert.equal(dayKey(new Date(2026, 0, 5, 0, 1)), '2026-01-05');
+
+  // The streak: one a day, kept through today, lost after a missed day.
+  assert.equal(streakNow(NEW_DAILY, '2026-11-24'), 0);
+  const one = finishDay(NEW_DAILY, '2026-11-24', { hits: 95, slide: 60 }, 80);
+  assert.ok(one.firstToday && !one.newBest, 'a first session is not a "new best"');
+  assert.equal(one.daily.streak, 1);
+  assert.equal(one.daily.best, 80);
+  assert.deepEqual(one.daily.levels, { hits: 'medium', slide: 'easy' });
+  assert.deepEqual(one.moved, [{ part: 'hits', to: 'medium', up: true }]);
+  assert.ok(doneToday(one.daily, '2026-11-24') && !doneToday(one.daily, '2026-11-25'));
+  // A second session the same day counts as a session, not as a day.
+  const again = finishDay(one.daily, '2026-11-24', { hits: 50, slide: 75 }, 85);
+  assert.ok(!again.firstToday && again.newBest);
+  assert.equal(again.daily.streak, 1);
+  assert.equal(again.daily.sessions, 2);
+  assert.deepEqual(again.moved, [{ part: 'hits', to: 'easy', up: false }]);
+  // The next day extends it, across a month end and a clock change.
+  const two = finishDay(again.daily, '2026-11-25', { hits: null, slide: null }, null);
+  assert.equal(two.daily.streak, 2);
+  assert.equal(two.daily.best, 85, 'no score leaves the best alone');
+  assert.equal(finishDay({ ...NEW_DAILY, lastDay: '2026-10-31', streak: 4 }, '2026-11-01', { hits: 80, slide: 80 }, 80).daily.streak, 5);
+  assert.equal(streakNow({ ...NEW_DAILY, lastDay: '2026-03-07', streak: 3 }, '2026-03-08'), 3);
+  assert.equal(streakNow(two.daily, '2026-11-26'), 2, 'still alive the day after');
+  assert.equal(streakNow(two.daily, '2026-11-27'), 0, 'gone once a whole day is missed');
+  const restart = finishDay(two.daily, '2026-11-28', { hits: 80, slide: 80 }, 70);
+  assert.equal(restart.daily.streak, 1);
+  assert.equal(restart.daily.longest, 2, 'the longest streak is kept');
+
+  // The session: four parts around the home note, drawn fresh each day.
+  const sets = dailySets(50, { ...NEW_DAILY, levels: { hits: 'medium', slide: 'hard' } }, seeded(4));
+  assert.deepEqual(sets.map((set) => set.part), ['warm', 'hits', 'slide', 'hold']);
+  assert.deepEqual(sets[0].steps.map((step) => step.midi), [50, 52, 54, 52, 50]);
+  assert.equal(sets[1].steps.length, DAILY_RUNS);
+  assert.ok(sets[1].steps.every((step) => step.phrase!.length === HIT_LEVELS.medium.notes));
+  assert.equal(sets[2].steps.length, DAILY_SLIDES);
+  assert.ok(sets[2].steps.every((step) => step.slide !== undefined));
+  assert.deepEqual(sets[3].steps.map((step) => [step.midi, step.holdMs]), [[50, 5000]]);
+  assert.equal(sets[1].title, 'Hit the notes, medium');
+  assert.notDeepEqual(
+    dailySets(50, NEW_DAILY, seeded(1))[1].steps.map(stepLabel),
+    dailySets(50, NEW_DAILY, seeded(2))[1].steps.map(stepLabel),
+    'two days are not the same',
+  );
+  // Every note has a tone, for the lowest and highest home notes.
+  for (const home of [usableHome(0), usableHome(127)]) {
+    for (const set of dailySets(home, NEW_DAILY, seeded(9))) {
+      for (const step of set.steps) {
+        const path = stepPath(step);
+        const lowest = path === null ? step.midi! : path.lowest;
+        const highest = path === null ? step.midi! : path.highest;
+        assert.ok(lowest >= LOWEST_TONE && highest <= HIGHEST_TONE, `${set.part} from ${home}`);
+      }
+    }
+  }
+  // The long note grows with the longest streak, to 10 seconds at most.
+  assert.equal(holdSeconds(NEW_DAILY), 5);
+  assert.equal(holdSeconds({ ...NEW_DAILY, longest: 6 }), 7);
+  assert.equal(holdSeconds({ ...NEW_DAILY, longest: 99 }), 10);
+
+  // The saved record is read back, tolerating anything missing or malformed.
+  assert.deepEqual(parseDaily(null), NEW_DAILY);
+  assert.deepEqual(parseDaily('not json'), NEW_DAILY);
+  assert.deepEqual(parseDaily('null'), NEW_DAILY);
+  assert.deepEqual(parseDaily(JSON.stringify(restart.daily)), restart.daily);
+  assert.deepEqual(parseDaily('{"lastDay":"yesterday","streak":9,"levels":{"hits":"extreme"}}'), NEW_DAILY);
 }
 
 console.log(

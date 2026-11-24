@@ -148,6 +148,15 @@ const SLIDE_WAIT_MS = 3000;
  * breath, and without this the ball blinks out at each one.
  */
 export const VOICE_GAP_MS = 300;
+/**
+ * In a run of separate notes, how long the voice gets to settle on each new
+ * note. A sung note starts with a short scoop before the pitch is steady: in
+ * Dai and Dixon's 2016 study of 18,572 sung notes, most of those unsteady
+ * starts lasted longer than 0.2 seconds. So for the first 0.2 seconds of a
+ * note, a reading that is off the note is left out of the score. A reading
+ * that is already on the note still counts.
+ */
+export const NOTE_SETTLE_MS = 200;
 
 export function slideMs(slide: Slide): number {
   return slide.leadMs + slide.glideMs + slide.tailMs;
@@ -256,6 +265,12 @@ export type StepResult = {
   heldMs: number;
   /** For a slide: the share of it sung on the line, 0 to 100. Notes work theirs out from the fields above. */
   score?: number;
+  /**
+   * For a slide or a run of notes: the average miss with its direction kept,
+   * in cents. Positive is sharp, negative is flat. `closestCents` on these
+   * steps has no direction.
+   */
+  biasCents?: number;
 };
 
 export type Phase =
@@ -303,6 +318,8 @@ export type Run = {
   slideHeard: number;
   slideOnLine: number;
   slideErrorSum: number;
+  /** The same misses added up with their direction kept: positive is sharp. */
+  slideBiasSum: number;
   slideVoiced: number;
   /** When the singer's voice was last heard on this slide or line. */
   voicedAt: number | null;
@@ -335,6 +352,7 @@ const STEP_START = {
   slideHeard: 0,
   slideOnLine: 0,
   slideErrorSum: 0,
+  slideBiasSum: 0,
   slideVoiced: 0,
   voicedAt: null,
   trace: [] as { tMs: number; midi: number }[],
@@ -501,7 +519,15 @@ function endPath(run: Run, step: Step, path: Path): Run {
     sungMidi: run.closestHz === null ? null : Math.round(hzToMidi(run.closestHz)),
     heldMs: 0,
     score,
+    ...(run.slideVoiced === 0 ? {} : { biasCents: run.slideBiasSum / run.slideVoiced }),
   });
+}
+
+/** True while the note in play at this moment of a path is still in its first, unsteady instant. */
+function settling(path: Path, tMs: number): boolean {
+  let started: number | null = null;
+  for (const start of path.starts) if (start <= tMs) started = start;
+  return started !== null && tMs - started < NOTE_SETTLE_MS;
 }
 
 /**
@@ -518,16 +544,22 @@ function hearPath(run: Run, path: Path, hz: number | null, atMs: number): Run {
   // A short break in the voice keeps the last reading on screen. Only real readings are scored.
   const briefGap = run.voicedAt !== null && atMs - run.voicedAt <= VOICE_GAP_MS;
   let reading: TargetReading | null = briefGap ? run.reading : null;
-  let { slideOnLine, slideErrorSum, slideVoiced, trace } = run;
+  let { slideOnLine, slideErrorSum, slideBiasSum, slideVoiced, trace } = run;
+  // While the voice settles on a new note, only a reading already on it counts.
+  let counted = !settling(path, tMs);
   if (hz !== null) {
     const raw = centsBetween(hz, midiToHz(target));
     const octaves = Math.round(raw / 1200);
     const cents = raw - octaves * 1200;
     const inTune = Math.abs(cents) <= SLIDE_TOLERANCE_CENTS;
     reading = { cents, octaves, inTune };
+    counted = counted || inTune;
     if (inTune) slideOnLine++;
-    slideErrorSum += Math.abs(cents);
-    slideVoiced++;
+    if (counted) {
+      slideErrorSum += Math.abs(cents);
+      slideBiasSum += cents;
+      slideVoiced++;
+    }
     trace = [...trace, { tMs, midi: target + cents / 100 }];
   }
   return {
@@ -536,9 +568,10 @@ function hearPath(run: Run, path: Path, hz: number | null, atMs: number): Run {
     reading,
     voicedAt: hz === null ? run.voicedAt : atMs,
     slideStartedAt: startedAt,
-    slideHeard: run.slideHeard + 1,
+    slideHeard: run.slideHeard + (counted ? 1 : 0),
     slideOnLine,
     slideErrorSum,
+    slideBiasSum,
     slideVoiced,
     trace,
     closestHz: run.closestHz ?? hz,

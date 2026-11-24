@@ -35,6 +35,20 @@ export function scaleSteps(start: number): Step[] {
   return MAJOR_SCALE.map((above) => noteStep(start + above));
 }
 
+/**
+ * Where a scale starts for a singer whose home note is known: five piano
+ * keys below it. The octave then runs from a little under the home note to
+ * a little over it, so the easy note sits in the middle and the set reaches
+ * out both ways. Training across a full octave helped weak singers more
+ * than training inside five notes (Pfordresher and Greenspon 2025).
+ */
+export function voiceStart(home: number): number {
+  let start = home - 5;
+  while (start < LOWEST_TONE) start += 12;
+  while (start + 12 > HIGHEST_TONE) start -= 12;
+  return start;
+}
+
 export type Shift = {
   /** Two short lines for a button: an amount over a unit. */
   label: string;

@@ -8,9 +8,37 @@
  * Each level trains one thing and has a pass mark. Passing a level opens the
  * next. Achievements are worked out from the saved progress, never stored.
  *
+ * The order runs easy to hard by what studies of singing accuracy measured
+ * (2026-11-24), not by guesswork:
+ *
+ *   1. How many different notes. One note is easiest, then two, then a
+ *      pattern of four (Demorest and Pfordresher 2015: adults sang 74% of
+ *      single notes within half a semitone, 60% of two-note sequences and
+ *      46% of four-note patterns).
+ *   2. How far from the comfortable note. Weaker singers drift back toward
+ *      it: flat above it, sharp below it (Pfordresher and Brown 2007).
+ *   3. How big the jumps are. Singers shrink jumps, by about 12% for good
+ *      singers and 31% for weak ones, so a bigger jump lands further off
+ *      (the same study).
+ *   4. Gliding. A moving pitch is followed less exactly than a steady one
+ *      (Dai and Dixon 2016).
+ *
+ * Which way a line turns matters little: both groups got the direction
+ * right 92% of the time. So no level is built around direction alone.
+ *
  * Pure logic. No screen, microphone or storage code.
  */
-import { HIGHEST_TONE, LOWEST_TONE, noteStep, type Step, type StepResult } from './exercise.ts';
+import {
+  COUNTDOWN_MS,
+  HIGHEST_TONE,
+  LOWEST_TONE,
+  noteStep,
+  phraseStep,
+  slideStep,
+  type Step,
+  type StepResult,
+} from './exercise.ts';
+import { noteName } from './notes.ts';
 import { MAJOR_SCALE } from './quick.ts';
 import { grade, isPassing, summarize } from './report.ts';
 
@@ -48,6 +76,18 @@ export type Level = {
 };
 
 const notes = (home: number, above: number[]) => above.map((by) => noteStep(home + by));
+/** A run of notes sung in one go, each lasting `ms`. It starts on cue after the three dots. */
+const line = (home: number, above: number[], ms: number): Step => {
+  const sung = above.map((by) => ({ midi: home + by, ms }));
+  const name = sung.map((note) => noteName(note.midi)).join(' ');
+  return { ...phraseStep(name, sung), countdownMs: COUNTDOWN_MS, onCue: true };
+};
+/** A slide between two notes, on cue. */
+const slide = (home: number, from: number, to: number): Step => ({
+  ...slideStep(home + from, home + to),
+  countdownMs: COUNTDOWN_MS,
+  onCue: true,
+});
 const longHold = (home: number, seconds: number): Step[] => [
   { midi: home, holdMs: seconds * 1000, listenMs: seconds * 1000 + 4000 },
 ];
@@ -70,6 +110,22 @@ export const LEVELS: Level[] = [
     passMark: 1,
   },
   {
+    id: 'near-home',
+    title: 'Notes near home',
+    task: 'Four single notes, each a little above or below your home note.',
+    trains: 'Matching one note at a time away from your easiest pitch. Voices pull back toward home.',
+    steps: (home) => notes(home, [2, -2, 4, -3]),
+    passMark: 3,
+  },
+  {
+    id: 'two-notes',
+    title: 'Two notes in a row',
+    task: 'Hear two notes, then sing both in one breath, a second each.',
+    trains: 'Moving from one note to the next in time. Two notes are harder than one.',
+    steps: (home) => [line(home, [0, 2], 1000), line(home, [0, 4], 1000), line(home, [4, 0], 1000)],
+    passMark: 2,
+  },
+  {
     id: 'three-up',
     title: 'Three steps up',
     task: 'Three notes, each a step higher than the last.',
@@ -81,7 +137,7 @@ export const LEVELS: Level[] = [
     id: 'five-up-back',
     title: 'Five up and back',
     task: 'Five notes up, then back down to where you started.',
-    trains: 'Coming down in tune, which is harder than going up.',
+    trains: 'Coming back down in tune, and ending on the note you started from.',
     steps: (home) => notes(home, [0, 2, 4, 5, 7, 5, 4, 2, 0]),
     passMark: 7,
   },
@@ -92,6 +148,19 @@ export const LEVELS: Level[] = [
     trains: 'Breath control: a steady stream of air keeps the pitch from sagging.',
     steps: (home) => longHold(home, 5),
     passMark: 1,
+  },
+  {
+    id: 'patterns',
+    title: 'Four-note patterns',
+    task: 'Hear four notes, then sing all four in one go.',
+    trains: 'Carrying a short tune in your head. Four different notes are the hardest thing to copy.',
+    steps: (home) => [
+      line(home, [0, 2, 4, 2], 800),
+      line(home, [4, 2, 0, 2], 800),
+      line(home, [0, 4, 2, 7], 800),
+      line(home, [7, 4, 2, 0], 800),
+    ],
+    passMark: 3,
   },
   {
     id: 'octave',
@@ -108,6 +177,14 @@ export const LEVELS: Level[] = [
     trains: 'Intervals: landing on a distant note without sliding up to it.',
     steps: (home) => notes(home, [0, 4, 0, 7, 0, 12]),
     passMark: 5,
+  },
+  {
+    id: 'slides',
+    title: 'Slides',
+    task: 'Glide smoothly from one note to another, short slides first.',
+    trains: 'Steering your pitch while it moves, which is harder than landing on a still note.',
+    steps: (home) => [slide(home, 0, 2), slide(home, 4, 0), slide(home, 0, 7), slide(home, 7, 0)],
+    passMark: 3,
   },
   {
     id: 'hold-10',
@@ -133,11 +210,23 @@ export const LEVELS: Level[] = [
     steps: (home) => notes(home, [7, 9, 11, 12, 14, 16]),
     passMark: 4,
   },
+  {
+    id: 'leaps',
+    title: 'Leaping lines',
+    task: 'Five quick notes with wide jumps, across your whole octave.',
+    trains: 'Everything at once: many notes, big jumps, far from home, and less time on each.',
+    steps: (home) => [
+      line(home, [0, 4, 7, 4, 0], 600),
+      line(home, [0, 7, 4, 12, 7], 600),
+      line(home, [12, 7, 4, 0, 4], 600),
+      line(home, [0, 5, 2, 7, 12], 600),
+    ],
+    passMark: 3,
+  },
 ];
 
 /** Levels planned but not built, shown so the path ahead is visible. */
 export const COMING_LEVELS = [
-  'Slides across your bridge, the notes where your voice changes gear',
   'Loud and soft on one note',
   'Short phrases from real songs',
 ];
@@ -159,10 +248,14 @@ export function isPassed(progress: Progress, level: Level): boolean {
   return progress.passed.includes(level.id);
 }
 
-/** A level is open when it is the first, or the one before it is passed. */
+/**
+ * A level is open when it is the first, when the one before it is passed, or
+ * when it is passed itself. The last case keeps a level open for a singer who
+ * passed it before a new level was added in front of it.
+ */
 export function isOpen(progress: Progress, level: Level): boolean {
   const at = LEVELS.indexOf(level);
-  return at === 0 || isPassed(progress, LEVELS[at - 1]);
+  return at === 0 || isPassed(progress, level) || isPassed(progress, LEVELS[at - 1]);
 }
 
 /** The first level not yet passed, or null when all are done. */
@@ -215,7 +308,9 @@ export function achievements(progress: Progress): Achievement[] {
     { title: 'First note', detail: 'Found your home note', earned: has('home') },
     { title: 'On pitch', detail: 'Matched a note you were given', earned: has('match') },
     { title: 'Steady breath', detail: 'Held a note in tune for 5 seconds', earned: progress.longestHoldMs >= 5000 },
+    { title: 'Tune carrier', detail: 'Sang four-note patterns back', earned: has('patterns') },
     { title: 'Full octave', detail: 'Sang a whole major scale', earned: has('octave') },
+    { title: 'Smooth slider', detail: 'Followed slides between notes', earned: has('slides') },
     { title: 'Long breath', detail: 'Held a note in tune for 10 seconds', earned: progress.longestHoldMs >= 10_000 },
     { title: 'Octave range', detail: 'Matched notes a full octave apart', earned: range >= 13 },
     { title: 'Octave and a half', detail: 'Matched notes 19 or more apart', earned: range >= 19 },

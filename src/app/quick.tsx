@@ -7,10 +7,13 @@ import { ShiftButtons } from '@/components/shift-buttons';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Label, ListRow, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { useProgress } from '@/hooks/use-progress';
+import { difficultyName, nextDifficulty } from '@/lib/daily';
 import { volumeSteps, type Step, type StepResult } from '@/lib/exercise';
 import { noteName } from '@/lib/notes';
 import { hitSteps } from '@/lib/hits';
-import { STARTS, scaleSteps, type StartChoice } from '@/lib/quick';
+import { STARTS, scaleSteps, voiceStart, type StartChoice } from '@/lib/quick';
+import { summarize } from '@/lib/report';
 import { slideSteps, type Difficulty, type SlideOrder } from '@/lib/slide';
 
 /**
@@ -103,11 +106,13 @@ export default function PracticeScreen() {
   const [attempts, setAttempts] = useState(0);
   const [order, setOrder] = useState<SlideOrder>('up');
   const [level, setLevel] = useState<Difficulty>('easy');
+  /** The home note from Progression or Today's practice, if it has been found. */
+  const { progress } = useProgress();
 
   const everything = sets.flatMap((set) => set.results);
   const setCount = sets.length === 1 ? '1 set' : `${sets.length} sets`;
 
-  const sing = (mode: Mode, start: number, slideOrder: SlideOrder) => {
+  const sing = (mode: Mode, start: number, slideOrder: SlideOrder, level_: Difficulty = level) => {
     // Random slides are picked here, once, so the set does not change under the singer.
     const steps =
       mode === 'volume'
@@ -115,8 +120,9 @@ export default function PracticeScreen() {
         : mode === 'scale'
           ? scaleSteps(start)
           : mode === 'hits'
-            ? hitSteps(start, level, Math.random)
-            : slideSteps(start, slideOrder, level, Math.random);
+            ? hitSteps(start, level_, Math.random)
+            : slideSteps(start, slideOrder, level_, Math.random);
+    setLevel(level_);
     setAttempts(attempts + 1);
     setView({ name: 'singing', mode, start, order: slideOrder, steps, attempt: attempts + 1 });
   };
@@ -167,10 +173,32 @@ export default function PracticeScreen() {
   if (view.name === 'report') {
     const { mode, start, showLatest } = view;
     const latest = sets[sets.length - 1];
+    // Slides and runs come in three difficulties. After a set, point at the one that fits:
+    // up after 90% or better, down after a set that did not pass.
+    const fits =
+      showLatest && latest !== undefined && (mode === 'slide' || mode === 'hits')
+        ? nextDifficulty(level, summarize(latest.results).score)
+        : level;
+    const harder = ['easy', 'medium', 'hard'].indexOf(fits) > ['easy', 'medium', 'hard'].indexOf(level);
     return (
       <Screen back title="Report card" subtitle={`Sets finished this session: ${sets.length}`}>
         {showLatest && latest !== undefined && (
           <ReportCard notes title={`This set: ${latest.title}`} results={latest.results} />
+        )}
+        {fits !== level && (
+          <Card>
+            <Label>{harder ? 'Ready for more' : 'Ease off a step'}</Label>
+            <ThemedText themeColor="textSecondary">
+              {harder
+                ? `That was 90% or better, so ${difficultyName(level)} has little left to teach you. You improve fastest where you pass but have to work for it.`
+                : `That set did not pass. Drop to ${difficultyName(fits)}, get it clean, then come back.`}
+            </ThemedText>
+            <Button
+              primary
+              label={`Go again on ${difficultyName(fits)}`}
+              onPress={() => sing(mode, start, view.order, fits)}
+            />
+          </Card>
         )}
         {mode === 'volume' ? (
           <Button primary label="Go again" onPress={() => sing('volume', ANY_NOTE, view.order)} />
@@ -260,6 +288,13 @@ export default function PracticeScreen() {
         <Card>
           <Label>Where to start</Label>
           <View>
+            {progress.home !== null && (
+              <ListRow
+                title="Your voice"
+                value={span(voiceStart(progress.home))}
+                onPress={() => sing(mode, voiceStart(progress.home ?? ANY_NOTE), order)}
+              />
+            )}
             {CHOICES.map(({ choice, label }) => (
               <ListRow
                 key={choice}
@@ -270,8 +305,10 @@ export default function PracticeScreen() {
             ))}
           </View>
           <ThemedText type="small" themeColor="textSecondary">
-            Named after the six voice types, lowest to highest. Pick the one that feels easy, not
-            the one you think you are. You can move up or down after each set.
+            {progress.home !== null
+              ? `Your voice is the octave around your home note, ${noteName(progress.home)}. The rest are the six voice types, lowest to highest. `
+              : 'Named after the six voice types, lowest to highest. Pick the one that feels easy, not the one you think you are. '}
+            You can move up or down after each set.
           </ThemedText>
         </Card>
         <Button label="Change practice mode" onPress={() => setView({ name: 'menu' })} />
@@ -280,7 +317,7 @@ export default function PracticeScreen() {
   }
 
   return (
-    <Screen back title="Quick practice" subtitle="Pick a kind of practice.">
+    <Screen back title="Free practice" subtitle="Pick a kind of practice.">
       <View>
         {MODES.map((each) => (
           <ListRow
