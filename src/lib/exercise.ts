@@ -157,6 +157,21 @@ export const VOICE_GAP_MS = 300;
  * that is already on the note still counts.
  */
 export const NOTE_SETTLE_MS = 200;
+/**
+ * On a glide, the voice runs a little behind the tone it follows: a singer
+ * hears or sees the change before making it, and the app hears the voice a
+ * little late, since each pitch reading takes a slice of sound. So a reading
+ * is scored against wherever the glide was at any point in the last quarter
+ * second, whichever is closest. Without this, a quick slide sung well scored
+ * as off the line.
+ */
+export const SLIDE_LAG_MS = 250;
+/**
+ * The first half second of a glide on cue is for finding its first note:
+ * silence or a reading off the line is left out, and a reading already on it
+ * counts. Reacting to the cue alone takes about a quarter second.
+ */
+export const SLIDE_START_MS = 500;
 
 export function slideMs(slide: Slide): number {
   return slide.leadMs + slide.glideMs + slide.tailMs;
@@ -523,6 +538,28 @@ function endPath(run: Run, step: Step, path: Path): Run {
   });
 }
 
+/**
+ * Where a sung pitch is nearest the path, looking back up to `lagMs` from
+ * this moment. Any octave counts. Returns the path's note there and the
+ * miss in cents.
+ */
+function nearestOnPath(
+  path: Path,
+  hz: number,
+  tMs: number,
+  lagMs: number,
+): { midi: number; cents: number; octaves: number } {
+  let best: { midi: number; cents: number; octaves: number } | null = null;
+  for (let back = 0; back <= lagMs; back += 25) {
+    const midi = path.midiAt(Math.max(0, tMs - back));
+    const raw = centsBetween(hz, midiToHz(midi));
+    const octaves = Math.round(raw / 1200);
+    const cents = raw - octaves * 1200;
+    if (best === null || Math.abs(cents) < Math.abs(best.cents)) best = { midi, cents, octaves };
+  }
+  return best!;
+}
+
 /** True while the note in play at this moment of a path is still in its first, unsteady instant. */
 function settling(path: Path, tMs: number): boolean {
   let started: number | null = null;
@@ -540,17 +577,17 @@ function hearPath(run: Run, path: Path, hz: number | null, atMs: number): Run {
   const tMs = atMs - startedAt;
   if (tMs > path.totalMs) return { ...run, slideStartedAt: startedAt, clockMs: atMs };
 
-  const target = path.midiAt(tMs);
+  // A glide has no separate notes. Runs of notes and song lines keep their own timing.
+  const glide = path.starts.length === 0;
   // A short break in the voice keeps the last reading on screen. Only real readings are scored.
   const briefGap = run.voicedAt !== null && atMs - run.voicedAt <= VOICE_GAP_MS;
   let reading: TargetReading | null = briefGap ? run.reading : null;
   let { slideOnLine, slideErrorSum, slideBiasSum, slideVoiced, trace } = run;
-  // While the voice settles on a new note, only a reading already on it counts.
-  let counted = !settling(path, tMs);
+  // While the voice settles on a new note, or finds the first note of a
+  // glide, only a reading already on it counts.
+  let counted = !settling(path, tMs) && !(glide && tMs < SLIDE_START_MS);
   if (hz !== null) {
-    const raw = centsBetween(hz, midiToHz(target));
-    const octaves = Math.round(raw / 1200);
-    const cents = raw - octaves * 1200;
+    const { midi: target, cents, octaves } = nearestOnPath(path, hz, tMs, glide ? SLIDE_LAG_MS : 0);
     const inTune = Math.abs(cents) <= SLIDE_TOLERANCE_CENTS;
     reading = { cents, octaves, inTune };
     counted = counted || inTune;

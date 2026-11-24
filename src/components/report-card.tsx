@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { gradeColor } from '@/components/grade-color';
 import { Card, Label } from '@/components/ui';
 import { Spacing, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -8,25 +9,8 @@ import { advice } from '@/lib/coach';
 import type { StepResult } from '@/lib/exercise';
 import { HOLD } from '@/lib/hold';
 import { formatCents, noteName } from '@/lib/notes';
-import { grade, noteScore, rangeSize, summarize, type Grade } from '@/lib/report';
+import { grade, noteScore, rangeSize, scoreGrade, summarize } from '@/lib/report';
 import { stepLabel } from '@/lib/slide';
-
-/** The block behind a grade: green, yellow, orange, then red for a D or an F. */
-function gradeColor(letter: Grade | null, theme: ReturnType<typeof useTheme>): string {
-  switch (letter) {
-    case 'A':
-      return theme.gradeA;
-    case 'B':
-      return theme.tune;
-    case 'C':
-      return theme.gradeC;
-    case 'D':
-    case 'F':
-      return theme.gradeFail;
-    default:
-      return theme.backgroundElement;
-  }
-}
 
 /** One fact: its name at the left, its value at the right, a thin rule under it. */
 function Fact({ label, value }: { label: string; value: string }) {
@@ -56,7 +40,7 @@ function attempt(result: StepResult): string {
 
 /**
  * One line per note. The square at the left is the same mark the note had
- * while it was being sung: yellow for matched, tangerine for missed.
+ * while it was being sung, in the color of that note's own grade.
  */
 function NoteRows({ results }: { results: StepResult[] }) {
   const theme = useTheme();
@@ -69,7 +53,7 @@ function NoteRows({ results }: { results: StepResult[] }) {
               styles.square,
               {
                 borderColor: theme.text,
-                backgroundColor: result.matched ? theme.tune : theme.voice,
+                backgroundColor: gradeColor(scoreGrade(noteScore(result)), theme),
               },
             ]}
           />

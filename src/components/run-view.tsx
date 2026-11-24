@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { gradeColor } from '@/components/grade-color';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -16,6 +17,7 @@ import {
 } from '@/lib/exercise';
 import { HOLD, formatOctaves, type TargetReading } from '@/lib/hold';
 import { formatCents, nearestNote } from '@/lib/notes';
+import { noteScore, scoreGrade } from '@/lib/report';
 import { stepLabel } from '@/lib/slide';
 
 /**
@@ -160,14 +162,18 @@ function useElapsed(running: boolean, key: number): number {
   return running ? elapsed : 0;
 }
 
+/** How many columns draw the on-the-line band along a slide. */
+const LANE_COLUMNS = 72;
+
 /**
  * The pitch field for a slide: time runs left to right, pitch bottom to top.
- * The small dots are the path.
+ * The small dots are the path, and the faint band around them is how close
+ * counts as on the line.
  *
  * While the app plays the slide, a ring rides along the path so you can see
  * what you are hearing. On your turn the ring sets off again, on cue after
  * the countdown or else when you start singing, showing where the tone would be, and a ball shows where your
- * voice is. Keep the ball in the ring.
+ * voice is. Keep the ball in the band.
  */
 function PathField({ run, path }: { run: Run; path: Path }) {
   const theme = useTheme();
@@ -176,6 +182,9 @@ function PathField({ run, path }: { run: Run; path: Path }) {
   const highest = path.highest + 1.5;
   const up = (midi: number) => percent((midi - lowest) / (highest - lowest));
   const dots = Array.from({ length: 49 }, (_, i) => (i / 48) * total);
+  // The band that counts as on the line, drawn as thin columns along the path.
+  const lane = Array.from({ length: LANE_COLUMNS }, (_, i) => ((i + 0.5) / LANE_COLUMNS) * total);
+  const laneHeight = percent((2 * SLIDE_TOLERANCE_CENTS) / 100 / (highest - lowest));
 
   const playing = run.phase === 'tone';
   const heardFor = useElapsed(playing, run.turn) - SOUND_LEAD_MS;
@@ -202,6 +211,21 @@ function PathField({ run, path }: { run: Run; path: Path }) {
           { backgroundColor: theme.tune, width: percent(playing || ring === null ? 0 : ring / total) },
         ]}
       />
+      {lane.map((tMs) => (
+        <View
+          key={`lane${tMs}`}
+          style={[
+            styles.lane,
+            {
+              backgroundColor: theme.onTune,
+              left: percent(tMs / total - 0.5 / LANE_COLUMNS),
+              width: percent(1 / LANE_COLUMNS),
+              bottom: up(path.midiAt(tMs) - SLIDE_TOLERANCE_CENTS / 100),
+              height: laneHeight,
+            },
+          ]}
+        />
+      ))}
       {dots.map((tMs) => (
         <View
           key={tMs}
@@ -260,7 +284,7 @@ function PathField({ run, path }: { run: Run; path: Path }) {
   );
 }
 
-/** One square per step: yellow for matched, tangerine for missed, outlined for the one in play. */
+/** One square per step, in the color of its grade once sung, outlined for the one in play. */
 function StepMarks({ run }: { run: Run }) {
   const theme = useTheme();
   return (
@@ -269,7 +293,7 @@ function StepMarks({ run }: { run: Run }) {
         const result = run.results[i];
         const current = i === run.index && result === undefined;
         const fill =
-          result === undefined ? 'transparent' : result.matched ? theme.tune : theme.voice;
+          result === undefined ? 'transparent' : gradeColor(scoreGrade(noteScore(result)), theme);
         return (
           <View
             key={i}
@@ -308,7 +332,7 @@ export function RunView({ run }: { run: Run }) {
     if (reading === null) {
       detail = anyNote ? 'Sing "ah" on any easy note.' : slide ? (hits ? 'Your turn. Hit the notes.' : phrase ? 'Your turn. Sing the line.' : 'Your turn. Sing the slide.') : 'Sing it now.';
     } else {
-      detail = anyNote ? 'Keep it steady.' : slide ? 'Keep the ball in the ring.' : howClose(reading);
+      detail = anyNote ? 'Keep it steady.' : slide ? 'Keep the ball in the band.' : howClose(reading);
     }
   } else if (anyNote) {
     detail = 'Get ready.';
@@ -325,9 +349,9 @@ export function RunView({ run }: { run: Run }) {
     }
   }
 
-  // The countdown before a step: three dots, one going every third of a second.
+  // The countdown before a step: three dots in the middle of the field, one going every third of a second.
   const dots = countdownDots(run);
-  if (dots > 0) detail = Array.from({ length: dots }, () => '●').join(' ');
+  if (dots > 0) detail = 'Get ready.';
 
   let count = ' ';
   if (phase === 'listening' && dots === 0) {
@@ -376,16 +400,30 @@ export function RunView({ run }: { run: Run }) {
         </View>
       </View>
 
-      {volume !== undefined ? (
-        <VolumeField volume={volume} loudness={run.loudness} flood={holdShare} />
-      ) : path !== null ? (
-        <PathField run={run} path={path} />
-      ) : (
-        <NoteField reading={reading} flood={holdShare} />
-      )}
+      <View>
+        {volume !== undefined ? (
+          <VolumeField volume={volume} loudness={run.loudness} flood={holdShare} />
+        ) : path !== null ? (
+          <PathField run={run} path={path} />
+        ) : (
+          <NoteField reading={reading} flood={holdShare} />
+        )}
+        {dots > 0 && (
+          <View pointerEvents="none" style={styles.countdown}>
+            {/* On a patch of the field, so the note line and path do not run through the dots. */}
+            <View style={[styles.dotsPatch, { backgroundColor: theme.field }]}>
+              <ThemedText
+                accessibilityLabel={`Starting in ${dots}`}
+                style={[styles.dots, { color: theme.onTune }]}>
+                {Array.from({ length: dots }, () => '●').join(' ')}
+              </ThemedText>
+            </View>
+          </View>
+        )}
+      </View>
 
       <View style={styles.under}>
-        <ThemedText style={dots > 0 ? styles.dots : styles.detail}>{detail}</ThemedText>
+        <ThemedText style={styles.detail}>{detail}</ThemedText>
         <View style={styles.between}>
           <ThemedText type="smallBold">
             {volume !== undefined && volume.kind !== 'match'
@@ -418,12 +456,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   target: Type.note,
-  /** The countdown dots, the same height as the words they stand in for. */
+  /** The countdown, laid over the middle of the field. */
+  countdown: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dotsPatch: {
+    borderRadius: 20,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
+  },
   dots: {
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 44,
+    lineHeight: 56,
     fontWeight: 600,
-    letterSpacing: 6,
+    letterSpacing: 14,
   },
   /** A slide's name is three times as long as a note's, so it is set smaller and kept on one line. */
   slideTarget: Type.figure,
@@ -486,6 +534,10 @@ const styles = StyleSheet.create({
   },
   edgeBottom: {
     bottom: Spacing.two,
+  },
+  lane: {
+    position: 'absolute',
+    opacity: 0.12,
   },
   pathDot: {
     position: 'absolute',

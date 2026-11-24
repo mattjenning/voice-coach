@@ -134,6 +134,10 @@ export default function TodayScreen() {
             ? `${sets.length} short parts, about three minutes.`
             : `${sets[view.at - 1].title}: ${lastScore}%, ${grade(summarize(last)) ?? ''}.`
         }>
+        {/* How the part just sung went, on its colored grade block. */}
+        {view.at > 0 && last !== undefined && lastScore !== null && (
+          <ReportCard title={sets[view.at - 1].title} results={last} />
+        )}
         <Card>
           <Label>{`Part ${view.at + 1} of ${sets.length}: ${set.title}`}</Label>
           <ThemedText themeColor="textSecondary">{set.line}</ThemedText>

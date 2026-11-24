@@ -61,7 +61,7 @@ import {
   type Progress,
 } from '../src/lib/progression.ts';
 import { MAJOR_SCALE, SHIFTS, STARTS, canShift, canStartOn, scaleSteps } from '../src/lib/quick.ts';
-import { grade, isPassing, noteScore, rangeSize, summarize } from '../src/lib/report.ts';
+import { grade, isPassing, noteScore, rangeSize, scoreGrade, summarize } from '../src/lib/report.ts';
 import { DIFFICULTY, pathSound, slideSteps, stepLabel } from '../src/lib/slide.ts';
 import { HIT_LEVELS, HIT_RUNS, hitSteps } from '../src/lib/hits.ts';
 import { advice } from '../src/lib/coach.ts';
@@ -428,6 +428,12 @@ assert.equal(currentStep(NO_RUN), null);
   assert.equal(run.results[0].sungMidi, 53);
 }
 
+// --- One note's grade -------------------------------------------------------
+
+assert.deepEqual([100, 90, 89, 80, 79, 70, 69, 60, 59, 0].map(scoreGrade), [
+  'A', 'A', 'B', 'B', 'C', 'C', 'D', 'D', 'F', 'F',
+]);
+
 // --- Slides ----------------------------------------------------------------
 
 {
@@ -484,6 +490,35 @@ assert.equal(currentStep(NO_RUN), null);
   assert.equal(silent.results[0].score, 0);
   assert.equal(silent.results[0].closestCents, null);
   assert.equal(summarize(silent.results).score, 0);
+
+  // A quick slide on cue, the way Slide mode and Today's practice run them:
+  // five scale steps (nine half steps) up in about 3.75 seconds.
+  {
+    const quick: Step = { ...slideStep(60, 69), countdownMs: 1000, onCue: true };
+    quick.slide!.glideMs = 3700;
+    quick.slide!.leadMs = 600;
+    quick.listenMs = slideMs(quick.slide!) + 1000;
+    /** The cue is at 1000. Start `startAfter` later, and trail the tone by `lagMs`. */
+    const sing = (startAfter: number, lagMs: number) => {
+      let r = runReducer(NO_RUN, { type: 'start', steps: [quick] });
+      r = runReducer(r, { type: 'listen', atMs: 0 });
+      for (let at = 50; r.phase === 'listening' && at < 20_000; at += 50) {
+        const t = at - 1000;
+        const sung = t < startAfter ? null : slideMidiAt(60, quick.slide!, Math.max(0, t - lagMs));
+        r = hear(r, sung === null ? null : hzOf(sung), at);
+      }
+      return r.results[0].score ?? -1;
+    };
+    assert.equal(sing(0, 0), 100, 'right on the tone');
+    // Trailing the tone by a fifth of a second is how a voice follows a glide.
+    assert.ok(sing(0, 200) >= 95, `a fifth of a second behind scored ${sing(0, 200)}`);
+    // Coming in 0.4 seconds after the cue is reaction time, not a mistake.
+    assert.ok(sing(400, 150) >= 90, `a 0.4 second start scored ${sing(400, 150)}`);
+    // But a whole second behind is not following it.
+    assert.ok(sing(0, 1000) < 70, `a second behind scored ${sing(0, 1000)}`);
+    // And silence after the first half second still counts against the singer.
+    assert.ok(sing(1500, 0) < 80, `starting 1.5 seconds late scored ${sing(1500, 0)}`);
+  }
 
   // If the microphone goes quiet mid-slide, the clock alone still ends it.
   let ticking = runReducer(NO_RUN, { type: 'start', steps: [step, step] });
@@ -583,7 +618,7 @@ assert.equal(currentStep(NO_RUN), null);
             each.slide!.glideMs >= usual * 0.74 && each.slide!.glideMs <= usual * 1.34,
             `${level} glide of ${each.slide!.glideMs} ms is near ${usual}`,
           );
-          assert.ok(each.slide!.leadMs >= 300 && each.slide!.leadMs <= 900);
+          assert.ok(each.slide!.leadMs >= 600 && each.slide!.leadMs <= 1000);
           glides.add(each.slide!.glideMs);
           leads.add(each.slide!.leadMs);
           longest = Math.max(longest, travelled);

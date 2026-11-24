@@ -78,11 +78,15 @@ export type Grade = 'A' | 'B' | 'C' | 'D' | 'F';
 
 /** The usual school scale: A from 90, B from 80, C from 70, D from 60, F below. */
 export function grade(summary: Summary): Grade | null {
-  if (summary.score === null) return null;
-  if (summary.score >= 90) return 'A';
-  if (summary.score >= 80) return 'B';
-  if (summary.score >= 70) return 'C';
-  if (summary.score >= 60) return 'D';
+  return summary.score === null ? null : scoreGrade(summary.score);
+}
+
+/** The letter for one score, 0 to 100: a single note's, or a whole set's. */
+export function scoreGrade(score: number): Grade {
+  if (score >= 90) return 'A';
+  if (score >= 80) return 'B';
+  if (score >= 70) return 'C';
+  if (score >= 60) return 'D';
   return 'F';
 }
 

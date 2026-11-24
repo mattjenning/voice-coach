@@ -39,8 +39,11 @@ const TURN_SHARE = 0.4;
  * feeling the same seven times over.
  */
 const SPEED_SPREAD = 0.75;
-/** How long the first note is held before the glide, shortest and longest. */
-const LEAD_MS = { least: 300, most: 900 };
+/**
+ * How long the first note is held before the glide, shortest and longest.
+ * At least 0.6 seconds, so the singer lands the first note before it moves.
+ */
+export const LEAD_MS = { least: 600, most: 1000 };
 
 /**
  * The seven slides of one set.
