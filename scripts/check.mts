@@ -63,7 +63,7 @@ import {
 import { MAJOR_SCALE, SHIFTS, STARTS, canShift, canStartOn, scaleSteps } from '../src/lib/quick.ts';
 import { grade, isPassing, noteScore, rangeSize, scoreGrade, summarize } from '../src/lib/report.ts';
 import { DIFFICULTY, pathSound, slideSteps, stepLabel } from '../src/lib/slide.ts';
-import { HIT_LEVELS, HIT_RUNS, hitSteps } from '../src/lib/hits.ts';
+import { HIT_LEVELS, HIT_RUNS, HIT_TUNES, hitSteps, tunePlaces } from '../src/lib/hits.ts';
 import { advice } from '../src/lib/coach.ts';
 import {
   DAILY_RUNS,
@@ -703,11 +703,13 @@ assert.deepEqual([100, 90, 89, 80, 79, 70, 69, 60, 59, 0].map(scoreGrade), [
     let lowest = 99;
     let highest = -1;
     const firsts = new Set<number>();
+    const tunesHeard = new Set<string>();
     const lengths = new Set<number>();
     let uneven = 0;
     let runs = 0;
     for (let seed = 1; seed <= 40; seed++) {
-      const set = hitSteps(48, level, seeded(seed));
+      // Seeds spread apart: the test generator's first draws barely change between neighbouring seeds.
+      const set = hitSteps(48, level, seeded(seed * 7919));
       runs += set.length;
       assert.equal(set.length, HIT_RUNS);
       for (const each of set) {
@@ -735,6 +737,10 @@ assert.deepEqual([100, 90, 89, 80, 79, 70, 69, 60, 59, 0].map(scoreGrade), [
         lowest = Math.min(lowest, ...places);
         highest = Math.max(highest, ...places);
         firsts.add(places[0]);
+        tunesHeard.add(places.join());
+        // The last note is the longest, so the tune comes to rest.
+        assert.equal(notes[notes.length - 1].ms, rule.longestMs, `${level} ends on a long note`);
+        assert.equal(new Set(set.map((step) => step.phrase!.map((note) => note.midi).join())).size, HIT_RUNS, 'no tune twice in a set');
         // The whole run is the notes, one after another.
         const path = stepPath(each)!;
         assert.equal(path.totalMs, notes.reduce((sum, note) => sum + note.ms, 0));
@@ -744,7 +750,8 @@ assert.deepEqual([100, 90, 89, 80, 79, 70, 69, 60, 59, 0].map(scoreGrade), [
     assert.equal(biggest, rule.maxJump, `${level} uses its biggest jump`);
     assert.equal(lowest, 0, `${level} reaches the bottom`);
     assert.equal(highest, 7, `${level} reaches the top`);
-    assert.ok(firsts.size >= 5, `${level} runs start on many notes`);
+    assert.ok(firsts.size >= 2, `${level} runs start on more than one note`);
+    assert.equal(tunesHeard.size, HIT_TUNES[level].length, `${level}: every tune comes up`);
     assert.ok(lengths.has(rule.shortestMs) && lengths.has(rule.longestMs), `${level} uses its whole range of lengths`);
     assert.ok(uneven > runs * 0.9, `${level}: nearly every run mixes note lengths (${uneven} of ${runs})`);
   }
@@ -770,6 +777,46 @@ assert.deepEqual([100, 90, 89, 80, 79, 70, 69, 60, 59, 0].map(scoreGrade), [
   assert.ok(good.matched);
   const flat = sing(() => run.phrase![0].midi);
   assert.ok(!flat.matched && (flat.score ?? 100) < 50, `one note throughout scored ${flat.score}`);
+}
+
+// Every Hit the Notes tune is a complete phrase in the major key (Matthew, 2026-11-25).
+{
+  /** Chords of the key, as scale places: I, ii, IV, V, vi. A leap joins two notes of one of them. */
+  const chords = [
+    [0, 2, 4, 7],
+    [1, 3, 5],
+    [0, 3, 5, 7],
+    [1, 4, 6],
+    [0, 2, 5, 7],
+  ];
+  for (const level of ['easy', 'medium', 'hard'] as const) {
+    const rule = HIT_LEVELS[level];
+    const tunes = HIT_TUNES[level];
+    assert.ok(tunes.length >= HIT_RUNS, `${level} has enough tunes for a set`);
+    assert.equal(new Set(tunes).size, tunes.length, `${level} has no tune twice`);
+    for (const tune of tunes) {
+      const places = tunePlaces(tune);
+      const last = places.length - 1;
+      assert.ok(places.every((p) => Number.isInteger(p) && p >= 0 && p <= 7), `${tune}: every note is on the scale`);
+      assert.equal(places.length, rule.notes, `${tune}: ${level} tunes have ${rule.notes} notes`);
+      assert.ok(places[last] === 0 || places[last] === 7, `${tune}: ends on do`);
+      assert.ok(Math.abs(places[last] - places[last - 1]) <= 2, `${tune}: arrives home by a step or a skip`);
+      for (let i = 0; i < last; i++) {
+        const move = places[i + 1] - places[i];
+        // Ti leads up to do, or steps down to la in a falling line.
+        if (places[i] === 6) assert.ok(places[i + 1] === 7 || places[i + 1] === 5, `${tune}: ti goes to do or la`);
+        // Never the tritone between fa and ti.
+        assert.ok(!(Math.min(places[i], places[i + 1]) === 3 && Math.max(places[i], places[i + 1]) === 6), `${tune}: no fa-ti leap`);
+        if (Math.abs(move) >= 3) {
+          assert.ok(chords.some((chord) => chord.includes(places[i]) && chord.includes(places[i + 1])), `${tune}: a leap joins two notes of one chord`);
+          if (i + 1 < last) {
+            const next = places[i + 2] - places[i + 1];
+            assert.ok(Math.abs(next) === 1 || Math.sign(next) !== Math.sign(move), `${tune}: a leap is followed by a step or a turn`);
+          }
+        }
+      }
+    }
+  }
 }
 
 // --- Volume match ----------------------------------------------------------

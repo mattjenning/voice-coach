@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Label, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { usePasses } from '@/hooks/use-passes';
+import { useSwipeBack } from '@/hooks/use-swipe-back';
 import { useTheme } from '@/hooks/use-theme';
 import type { StepResult } from '@/lib/exercise';
 import {
@@ -54,6 +55,8 @@ export default function SongScreen() {
   const [view, setView] = useState<View_>({ name: 'lines' });
   const [attempts, setAttempts] = useState(0);
   const [erasing, setErasing] = useState(false);
+  // A swipe back from a line or its result goes to the list of lines, not the start screen.
+  useSwipeBack(view.name === 'lines' ? null : () => setView({ name: 'lines' }));
 
   const sing = (line: number | null) => {
     setAttempts(attempts + 1);

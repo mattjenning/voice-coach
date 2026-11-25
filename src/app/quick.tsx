@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Label, ListRow, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useProgress } from '@/hooks/use-progress';
+import { useSwipeBack } from '@/hooks/use-swipe-back';
 import { difficultyName, nextDifficulty } from '@/lib/daily';
 import { volumeSteps, type Step, type StepResult } from '@/lib/exercise';
 import { noteName } from '@/lib/notes';
@@ -29,7 +30,13 @@ const TITLES: Record<Mode, string> = {
   volume: 'Volume match',
 };
 
+/** In the order the Free practice list shows them. Hit the Notes is first (Matthew, 2026-11-25). */
 const MODES: { mode: Mode; title: string; line: string }[] = [
+  {
+    mode: 'hits',
+    title: 'Hit the Notes',
+    line: 'Five short tunes of solid notes, each ending at home. The app plays each one first, then you land on every note.',
+  },
   {
     mode: 'scale',
     title: 'Scale mode',
@@ -39,11 +46,6 @@ const MODES: { mode: Mode; title: string; line: string }[] = [
     mode: 'slide',
     title: 'Slide mode',
     line: 'Seven slides from one note to another. The app plays each glide first, then you follow it.',
-  },
-  {
-    mode: 'hits',
-    title: 'Hit the Notes',
-    line: 'Five short runs of solid notes. The app plays each run first, then you land on every note.',
   },
   {
     mode: 'volume',
@@ -108,6 +110,13 @@ export default function PracticeScreen() {
   const [level, setLevel] = useState<Difficulty>('easy');
   /** The home note from Progression or Today's practice, if it has been found. */
   const { progress } = useProgress();
+
+  // A swipe back goes to the Free practice list from anywhere in a mode, and
+  // from the full report card to wherever it was opened. Only the list itself
+  // leaves for the start screen.
+  const swipeTo: View_ | null =
+    view.name === 'menu' ? null : view.name === 'session' ? view.back : { name: 'menu' };
+  useSwipeBack(swipeTo === null ? null : () => setView(swipeTo));
 
   const everything = sets.flatMap((set) => set.results);
   const setCount = sets.length === 1 ? '1 set' : `${sets.length} sets`;
@@ -278,10 +287,11 @@ export default function PracticeScreen() {
             <Label>How hard</Label>
             {levelButtons}
             <ThemedText type="small" themeColor="textSecondary">
-              Every note has its own length. Easy: four notes of 0.5 to 1.1 seconds, a scale note
-              apart, all one way, inside five notes. Medium: six notes of 0.4 to 1.2 seconds, up to
+              Every tune is a finished phrase that comes home to the starting note, low or high,
+              and rests on its last note. Easy: four notes of 0.5 to 1.1 seconds, steps and small
+              skips, all one way, inside five notes. Medium: six notes of 0.4 to 1.2 seconds, up to
               two apart, turning round once, across the octave. Hard: eight notes of 0.3 to 1.3
-              seconds, jumps up to four, any direction.
+              seconds, leaps up to a fifth, any direction.
             </ThemedText>
           </Card>
         )}

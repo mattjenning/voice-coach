@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Label, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useProgress } from '@/hooks/use-progress';
+import { useSwipeBack } from '@/hooks/use-swipe-back';
 import { useTheme } from '@/hooks/use-theme';
 import type { StepResult } from '@/lib/exercise';
 import { noteName } from '@/lib/notes';
@@ -69,6 +70,8 @@ export default function ProgressionScreen() {
   const [view, setView] = useState<View_>({ name: 'path' });
   const [attempts, setAttempts] = useState(0);
   const [erasing, setErasing] = useState(false);
+  // A swipe back from a level or its result goes to the list of levels, not the start screen.
+  useSwipeBack(view.name === 'path' ? null : () => setView({ name: 'path' }));
 
   const start = (level: Level) => {
     setAttempts(attempts + 1);

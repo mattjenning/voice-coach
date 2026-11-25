@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Label, Screen } from '@/components/ui';
 import { useDaily } from '@/hooks/use-daily';
 import { useProgress } from '@/hooks/use-progress';
+import { useSwipeBack } from '@/hooks/use-swipe-back';
 import {
   dailySets,
   dayKey,
@@ -45,6 +46,11 @@ export default function TodayScreen() {
   const [done, setDone] = useState<StepResult[][]>([]);
   const [attempts, setAttempts] = useState(0);
   const [missedHome, setMissedHome] = useState(false);
+  // A swipe back while singing does what Stop does: back to the page before the
+  // part. Between parts, a swipe leaves, like "Stop for today".
+  const swipeTo: View_ | null =
+    view.name === 'home' ? { name: 'intro' } : view.name === 'singing' ? { name: 'ready', at: view.at } : null;
+  useSwipeBack(swipeTo === null ? null : () => setView(swipeTo));
 
   const today = dayKey(new Date());
   const scoreOf = (results: StepResult[] | undefined) =>
