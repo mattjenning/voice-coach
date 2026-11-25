@@ -76,7 +76,7 @@ export type Level = {
 };
 
 const notes = (home: number, above: number[]) => above.map((by) => noteStep(home + by));
-/** A run of notes sung in one go, each lasting `ms`. It starts on cue after the three dots. */
+/** A run of notes sung in one go, each lasting `ms`. It starts on cue after the countdown. */
 const line = (home: number, above: number[], ms: number): Step => {
   const sung = above.map((by) => ({ midi: home + by, ms }));
   const name = sung.map((note) => noteName(note.midi)).join(' ');

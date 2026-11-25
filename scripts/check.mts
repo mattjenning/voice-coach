@@ -40,7 +40,7 @@ import {
   stepPath,
   volumeSteps,
   COUNTDOWN_MS,
-  countdownDots,
+  countdownShare,
   runReducer,
   timeLeftMs,
   type Run,
@@ -891,18 +891,18 @@ assert.deepEqual([100, 90, 89, 80, 79, 70, 69, 60, 59, 0].map(scoreGrade), [
   assert.equal(run.phase, 'done');
   assert.ok(!run.results[6].matched);
 
-  // The countdown: three dots, then two, then one, then listening. Singing during it does not count.
+  // The countdown: the yellow starts full and empties in time, then listening. Singing during it does not count.
   {
     let counting = runReducer(NO_RUN, { type: 'start', steps });
     counting = runReducer(counting, { type: 'listen', atMs: 0 });
-    assert.equal(countdownDots(counting), 3);
+    assert.equal(countdownShare(counting), 1);
     counting = loud(counting, -42, 400);
-    assert.equal(countdownDots(counting), 2);
+    assert.ok(Math.abs(countdownShare(counting) - (1 - 400 / C)) < 1e-9);
     assert.deepEqual(counting.levels, [], 'singing during the countdown is not counted');
     counting = runReducer(counting, { type: 'tick', atMs: 700 });
-    assert.equal(countdownDots(counting), 1);
+    assert.ok(Math.abs(countdownShare(counting) - (1 - 700 / C)) < 1e-9);
     counting = runReducer(counting, { type: 'tick', atMs: C });
-    assert.equal(countdownDots(counting), 0);
+    assert.equal(countdownShare(counting), 0);
     counting = loud(counting, -42, C + 100);
     assert.equal(counting.levels.length, 1, 'after the countdown it listens');
     assert.equal(counting.deadlineMs, C + 3500, 'the countdown does not eat into the listening time');

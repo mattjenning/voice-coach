@@ -60,7 +60,10 @@ export type Step = {
   onCue?: boolean;
 };
 
-/** How long the countdown before each Volume match step lasts. Shown as three dots. */
+/**
+ * How long the countdown before a step lasts. On screen the field starts full of
+ * yellow and empties over it (Matthew, 2026-11-25; three dots until then).
+ */
 export const COUNTDOWN_MS = 1000;
 
 /**
@@ -402,13 +405,15 @@ export function countingDown(run: Run): boolean {
   );
 }
 
-/** How many of the three countdown dots are left: 3, 2, 1, or 0 when it is over. */
-export function countdownDots(run: Run): number {
+/**
+ * How much of the countdown is left, as a share: 1 as it starts, falling to 0
+ * as it ends, and 0 when there is none. The yellow in the field is this wide.
+ */
+export function countdownShare(run: Run): number {
   if (!countingDown(run) || run.countdownUntil === null || run.clockMs === null) return 0;
   const step = run.steps[run.index];
   const total = step?.countdownMs ?? COUNTDOWN_MS;
-  const left = run.countdownUntil - run.clockMs;
-  return Math.min(3, Math.max(1, Math.ceil((3 * left) / total)));
+  return Math.min(1, Math.max(0, (run.countdownUntil - run.clockMs) / total));
 }
 
 /** Milliseconds of listening left, or 0 when not listening. */

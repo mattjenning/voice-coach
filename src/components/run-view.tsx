@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 
 import { gradeColor } from '@/components/grade-color';
 import { ThemedText } from '@/components/themed-text';
@@ -8,7 +8,7 @@ import { useTheme } from '@/hooks/use-theme';
 import {
   SLIDE_TOLERANCE_CENTS,
   VOLUME_TOLERANCE,
-  countdownDots,
+  countdownShare,
   stepPath,
   timeLeftMs,
   type Path,
@@ -53,13 +53,67 @@ function height(cents: number): number {
 
 const percent = (share: number) => `${Math.max(0, Math.min(100, share * 100))}%` as const;
 
+/**
+ * The yellow that floods a field from the left as you sing. During the
+ * countdown before a step it runs the other way: it starts full and empties
+ * in time with the countdown, then fills again as you sing (Matthew,
+ * 2026-11-25, in place of three dots).
+ */
+function Flood({ share, countdown }: { share: number; countdown: Countdown | null }) {
+  const theme = useTheme();
+  if (countdown !== null) return <CountdownFlood key={countdown.untilMs} {...countdown} />;
+  return <View style={[styles.flood, { backgroundColor: theme.tune, width: percent(share) }]} />;
+}
+
+/** A countdown in progress: when it ends, on the phone's clock, and how much of it is left now. */
+type Countdown = { untilMs: number; share: number };
+
+/**
+ * The emptying yellow. The run is only redrawn ten times a second, so the
+ * yellow is animated on its own from where it is to empty at the moment the
+ * countdown ends, and moves smoothly.
+ */
+function CountdownFlood({ untilMs, share }: Countdown) {
+  const theme = useTheme();
+  const [width] = useState(() => new Animated.Value(share));
+  useEffect(() => {
+    const emptying = Animated.timing(width, {
+      toValue: 0,
+      duration: Math.max(0, untilMs - Date.now()),
+      easing: Easing.linear,
+      useNativeDriver: false,
+    });
+    emptying.start();
+    return () => emptying.stop();
+  }, [width, untilMs]);
+  return (
+    <Animated.View
+      style={[
+        styles.flood,
+        {
+          backgroundColor: theme.tune,
+          width: width.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+        },
+      ]}
+    />
+  );
+}
+
 /** The pitch field for a held note. */
-function NoteField({ reading, flood }: { reading: TargetReading | null; flood: number }) {
+function NoteField({
+  reading,
+  flood,
+  countdown,
+}: {
+  reading: TargetReading | null;
+  flood: number;
+  countdown: Countdown | null;
+}) {
   const theme = useTheme();
   const zone = HOLD.toleranceCents / FIELD_RANGE_CENTS / 2;
   return (
     <View style={[styles.field, { backgroundColor: theme.field }]}>
-      <View style={[styles.flood, { backgroundColor: theme.tune, width: percent(flood) }]} />
+      <Flood share={flood} countdown={countdown} />
       {/* The in-tune band: two fine lines either side of the note. */}
       <View style={[styles.fine, { backgroundColor: theme.onTune, bottom: percent(0.5 + zone) }]} />
       <View style={[styles.fine, { backgroundColor: theme.onTune, bottom: percent(0.5 - zone) }]} />
@@ -95,10 +149,12 @@ function VolumeField({
   volume,
   loudness,
   flood,
+  countdown,
 }: {
   volume: Volume;
   loudness: number | null;
   flood: number;
+  countdown: Countdown | null;
 }) {
   const theme = useTheme();
   // The field shows a little beyond the singer's own softest and loudest.
@@ -109,7 +165,7 @@ function VolumeField({
     Math.abs(loudness - volume.target) <= VOLUME_TOLERANCE;
   return (
     <View style={[styles.field, { backgroundColor: theme.field }]}>
-      <View style={[styles.flood, { backgroundColor: theme.tune, width: percent(flood) }]} />
+      <Flood share={flood} countdown={countdown} />
       {volume.kind === 'match' && (
         <View
           style={[
@@ -162,29 +218,23 @@ function useElapsed(running: boolean, key: number): number {
   return running ? elapsed : 0;
 }
 
-/** How many columns draw the on-the-line band along a slide. */
-const LANE_COLUMNS = 72;
-
 /**
  * The pitch field for a slide: time runs left to right, pitch bottom to top.
- * The small dots are the path, and the faint band around them is how close
- * counts as on the line.
+ * The small dots are the path. The faint band that once sat around them, to
+ * show how close counts, is gone: Matthew found it looked odd (2026-11-25).
  *
  * While the app plays the slide, a ring rides along the path so you can see
  * what you are hearing. On your turn the ring sets off again, on cue after
  * the countdown or else when you start singing, showing where the tone would be, and a ball shows where your
- * voice is. Keep the ball in the band.
+ * voice is. Keep the ball on the line.
  */
-function PathField({ run, path }: { run: Run; path: Path }) {
+function PathField({ run, path, countdown }: { run: Run; path: Path; countdown: Countdown | null }) {
   const theme = useTheme();
   const total = path.totalMs;
   const lowest = path.lowest - 1.5;
   const highest = path.highest + 1.5;
   const up = (midi: number) => percent((midi - lowest) / (highest - lowest));
   const dots = Array.from({ length: 49 }, (_, i) => (i / 48) * total);
-  // The band that counts as on the line, drawn as thin columns along the path.
-  const lane = Array.from({ length: LANE_COLUMNS }, (_, i) => ((i + 0.5) / LANE_COLUMNS) * total);
-  const laneHeight = percent((2 * SLIDE_TOLERANCE_CENTS) / 100 / (highest - lowest));
 
   const playing = run.phase === 'tone';
   const heardFor = useElapsed(playing, run.turn) - SOUND_LEAD_MS;
@@ -205,27 +255,7 @@ function PathField({ run, path }: { run: Run; path: Path }) {
 
   return (
     <View style={[styles.field, { backgroundColor: theme.field }]}>
-      <View
-        style={[
-          styles.flood,
-          { backgroundColor: theme.tune, width: percent(playing || ring === null ? 0 : ring / total) },
-        ]}
-      />
-      {lane.map((tMs) => (
-        <View
-          key={`lane${tMs}`}
-          style={[
-            styles.lane,
-            {
-              backgroundColor: theme.onTune,
-              left: percent(tMs / total - 0.5 / LANE_COLUMNS),
-              width: percent(1 / LANE_COLUMNS),
-              bottom: up(path.midiAt(tMs) - SLIDE_TOLERANCE_CENTS / 100),
-              height: laneHeight,
-            },
-          ]}
-        />
-      ))}
+      <Flood share={playing || ring === null ? 0 : ring / total} countdown={countdown} />
       {dots.map((tMs) => (
         <View
           key={tMs}
@@ -332,7 +362,7 @@ export function RunView({ run }: { run: Run }) {
     if (reading === null) {
       detail = anyNote ? 'Sing "ah" on any easy note.' : slide ? (hits ? 'Your turn. Hit the notes.' : phrase ? 'Your turn. Sing the line.' : 'Your turn. Sing the slide.') : 'Sing it now.';
     } else {
-      detail = anyNote ? 'Keep it steady.' : slide ? 'Keep the ball in the band.' : howClose(reading);
+      detail = anyNote ? 'Keep it steady.' : slide ? 'Keep the ball on the line.' : howClose(reading);
     }
   } else if (anyNote) {
     detail = 'Get ready.';
@@ -349,12 +379,14 @@ export function RunView({ run }: { run: Run }) {
     }
   }
 
-  // The countdown before a step: three dots in the middle of the field, one going every third of a second.
-  const dots = countdownDots(run);
-  if (dots > 0) detail = 'Get ready.';
+  // The countdown before a step: the field's yellow starts full and empties in time with it.
+  const left = countdownShare(run);
+  const countdown: Countdown | null =
+    left > 0 && run.countdownUntil !== null ? { untilMs: run.countdownUntil, share: left } : null;
+  if (countdown !== null) detail = 'Get ready.';
 
   let count = ' ';
-  if (phase === 'listening' && dots === 0) {
+  if (phase === 'listening' && countdown === null) {
     count =
       slide && run.slideStartedAt === null
         ? 'The clock starts when you do.'
@@ -402,23 +434,11 @@ export function RunView({ run }: { run: Run }) {
 
       <View>
         {volume !== undefined ? (
-          <VolumeField volume={volume} loudness={run.loudness} flood={holdShare} />
+          <VolumeField volume={volume} loudness={run.loudness} flood={holdShare} countdown={countdown} />
         ) : path !== null ? (
-          <PathField run={run} path={path} />
+          <PathField run={run} path={path} countdown={countdown} />
         ) : (
-          <NoteField reading={reading} flood={holdShare} />
-        )}
-        {dots > 0 && (
-          <View pointerEvents="none" style={styles.countdown}>
-            {/* On a patch of the field, so the note line and path do not run through the dots. */}
-            <View style={[styles.dotsPatch, { backgroundColor: theme.field }]}>
-              <ThemedText
-                accessibilityLabel={`Starting in ${dots}`}
-                style={[styles.dots, { color: theme.onTune }]}>
-                {Array.from({ length: dots }, () => '●').join(' ')}
-              </ThemedText>
-            </View>
-          </View>
+          <NoteField reading={reading} flood={holdShare} countdown={countdown} />
         )}
       </View>
 
@@ -456,23 +476,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   target: Type.note,
-  /** The countdown, laid over the middle of the field. */
-  countdown: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dotsPatch: {
-    borderRadius: 20,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-  },
-  dots: {
-    fontSize: 44,
-    lineHeight: 56,
-    fontWeight: 600,
-    letterSpacing: 14,
-  },
   /** A slide's name is three times as long as a note's, so it is set smaller and kept on one line. */
   slideTarget: Type.figure,
   sungBlock: {
@@ -534,10 +537,6 @@ const styles = StyleSheet.create({
   },
   edgeBottom: {
     bottom: Spacing.two,
-  },
-  lane: {
-    position: 'absolute',
-    opacity: 0.12,
   },
   pathDot: {
     position: 'absolute',
