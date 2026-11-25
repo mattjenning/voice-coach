@@ -290,7 +290,7 @@ export default function PracticeScreen() {
               Every tune is a finished phrase that comes home to the starting note, low or high,
               and rests on its last note. Easy: four notes of 0.5 to 1.1 seconds, steps and small
               skips, all one way, inside five notes. Medium: six notes of 0.4 to 1.2 seconds, up to
-              two apart, turning round once, across the octave. Hard: eight notes of 0.3 to 1.3
+              two apart, turning round once, across the octave. Hard: eight notes of 0.4 to 1.3
               seconds, leaps up to a fifth, any direction.
             </ThemedText>
           </Card>
