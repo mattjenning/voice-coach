@@ -8,7 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Label, ListRow, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useProgress } from '@/hooks/use-progress';
-import { useSwipeBack } from '@/hooks/use-swipe-back';
+import { modePages } from '@/hooks/mode-pages';
 import { difficultyName, nextDifficulty } from '@/lib/daily';
 import { volumeSteps, type Step, type StepResult } from '@/lib/exercise';
 import { noteName } from '@/lib/notes';
@@ -92,35 +92,42 @@ function setTitle(mode: Mode, start: number, order: SlideOrder, level: Difficult
 /** One finished set: what it was and how every note or slide went. */
 type FinishedSet = { title: string; results: StepResult[] };
 
+/**
+ * The pages of Free practice. Each is a real page, so the phone's swipe back
+ * shows the page underneath. A set and its report card take the place of the
+ * page they were started from, so a swipe back from inside any mode lands on
+ * the Free practice list (Matthew, 2026-11-25).
+ */
 type View_ =
   | { name: 'menu' }
   | { name: 'choose'; mode: Mode }
-  /** A set is playing. `attempt` counts starts, so each one begins fresh. */
-  | { name: 'singing'; mode: Mode; start: number; order: SlideOrder; steps: Step[]; attempt: number }
+  /** A set is playing. */
+  | { name: 'singing'; mode: Mode; start: number; order: SlideOrder; steps: Step[] }
   | { name: 'report'; mode: Mode; start: number; order: SlideOrder; showLatest: boolean }
   /** Every finished set of the session, in full. */
-  | { name: 'session'; back: View_ };
+  | { name: 'session' };
 
-export default function PracticeScreen() {
-  const [view, setView] = useState<View_>({ name: 'menu' });
-  /** Every set finished since this screen opened. Sets stopped early are not kept. */
+/** What every page of Free practice shares while it is open. */
+function useShared() {
+  /** Every set finished since Free practice opened. Sets stopped early are not kept. */
   const [sets, setSets] = useState<FinishedSet[]>([]);
-  const [attempts, setAttempts] = useState(0);
   const [order, setOrder] = useState<SlideOrder>('up');
   const [level, setLevel] = useState<Difficulty>('easy');
   /** The home note from Progression or Today's practice, if it has been found. */
   const { progress } = useProgress();
+  return { sets, setSets, order, setOrder, level, setLevel, progress };
+}
 
-  // A swipe back goes to the Free practice list from anywhere in a mode, and
-  // from the full report card to wherever it was opened. Only the list itself
-  // leaves for the start screen.
-  const swipeTo: View_ | null =
-    view.name === 'menu' ? null : view.name === 'session' ? view.back : { name: 'menu' };
-  useSwipeBack(swipeTo === null ? null : () => setView(swipeTo));
+export const QuickPages = modePages<View_, ReturnType<typeof useShared>>({ name: 'menu' }, useShared);
+
+export default function PracticeScreen() {
+  const { view, shared, push, replace, back, toFirst } = QuickPages.usePage();
+  const { sets, setSets, order, setOrder, level, setLevel, progress } = shared;
 
   const everything = sets.flatMap((set) => set.results);
   const setCount = sets.length === 1 ? '1 set' : `${sets.length} sets`;
 
+  /** Start a set. From the list it opens on top; from a mode's page or a report card it takes its place. */
   const sing = (mode: Mode, start: number, slideOrder: SlideOrder, level_: Difficulty = level) => {
     // Random slides are picked here, once, so the set does not change under the singer.
     const steps =
@@ -132,8 +139,9 @@ export default function PracticeScreen() {
             ? hitSteps(start, level_, Math.random)
             : slideSteps(start, slideOrder, level_, Math.random);
     setLevel(level_);
-    setAttempts(attempts + 1);
-    setView({ name: 'singing', mode, start, order: slideOrder, steps, attempt: attempts + 1 });
+    const next: View_ = { name: 'singing', mode, start, order: slideOrder, steps };
+    if (view.name === 'menu') push(next);
+    else replace(next);
   };
 
   if (view.name === 'singing') {
@@ -142,21 +150,16 @@ export default function PracticeScreen() {
     return (
       <Screen title={TITLES[mode]} subtitle={title}>
         <ExercisePlayer
-          key={view.attempt}
           steps={view.steps}
           onDone={(results) => {
-            setSets([...sets, { title, results }]);
-            setView({ name: 'report', mode, start, order: view.order, showLatest: true });
+            setSets((all) => [...all, { title, results }]);
+            replace({ name: 'report', mode, start, order: view.order, showLatest: true });
           }}
-          onQuit={() =>
-            setView(
-              sets.length > 0
-                ? { name: 'report', mode, start, order: view.order, showLatest: false }
-                : mode === 'volume'
-                  ? { name: 'menu' }
-                  : { name: 'choose', mode },
-            )
-          }
+          onQuit={() => {
+            if (sets.length > 0) replace({ name: 'report', mode, start, order: view.order, showLatest: false });
+            else if (mode === 'volume') back();
+            else replace({ name: 'choose', mode });
+          }}
         />
       </Screen>
     );
@@ -174,7 +177,7 @@ export default function PracticeScreen() {
             results={set.results}
           />
         ))}
-        <Button primary label="Back" onPress={() => setView(view.back)} />
+        <Button primary label="Back" onPress={back} />
       </Screen>
     );
   }
@@ -223,9 +226,9 @@ export default function PracticeScreen() {
         <ReportCard title="This session" results={everything} />
         <Button
           label={`Full session report card (${setCount})`}
-          onPress={() => setView({ name: 'session', back: view })}
+          onPress={() => push({ name: 'session' })}
         />
-        <Button label="Change practice mode" onPress={() => setView({ name: 'menu' })} />
+        <Button label="Change practice mode" onPress={toFirst} />
       </Screen>
     );
   }
@@ -321,7 +324,7 @@ export default function PracticeScreen() {
             You can move up or down after each set.
           </ThemedText>
         </Card>
-        <Button label="Change practice mode" onPress={() => setView({ name: 'menu' })} />
+        <Button label="Change practice mode" onPress={toFirst} />
       </Screen>
     );
   }
@@ -337,7 +340,7 @@ export default function PracticeScreen() {
             onPress={() =>
               each.mode === 'volume'
                 ? sing('volume', ANY_NOTE, order)
-                : setView({ name: 'choose', mode: each.mode })
+                : push({ name: 'choose', mode: each.mode })
             }
           />
         ))}
@@ -345,7 +348,7 @@ export default function PracticeScreen() {
       {sets.length > 0 && (
         <Button
           label={`Session report card (${setCount})`}
-          onPress={() => setView({ name: 'session', back: view })}
+          onPress={() => push({ name: 'session' })}
         />
       )}
     </Screen>

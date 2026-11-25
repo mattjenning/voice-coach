@@ -1,0 +1,4 @@
+import { TodayPages } from '@/modes/today';
+
+/** The mode's pages, as a stack of their own. See src/hooks/mode-pages.tsx. */
+export default TodayPages.Layout;

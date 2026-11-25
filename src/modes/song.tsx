@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Label, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { usePasses } from '@/hooks/use-passes';
-import { useSwipeBack } from '@/hooks/use-swipe-back';
+import { modePages } from '@/hooks/mode-pages';
 import { useTheme } from '@/hooks/use-theme';
 import type { StepResult } from '@/lib/exercise';
 import {
@@ -24,11 +24,21 @@ import {
 
 const SONG = AMAZING_GRACE;
 
+/**
+ * The pages of Song mode. Each is a real page, so the phone's swipe back
+ * shows the page underneath. A line and its result take each other's place,
+ * so a swipe back from either lands on the list of lines.
+ */
 type View_ =
   | { name: 'lines' }
-  /** Singing one line, or the whole song when `line` is null. `attempt` makes each try fresh. */
-  | { name: 'singing'; line: number | null; attempt: number }
+  /** Singing one line, or the whole song when `line` is null. */
+  | { name: 'singing'; line: number | null }
   | { name: 'result'; line: number | null; results: StepResult[] };
+
+/** The clean passes are read once for all the pages. */
+const useSongPasses = () => usePasses(SONG);
+
+export const SongPages = modePages<View_, ReturnType<typeof useSongPasses>>({ name: 'lines' }, useSongPasses);
 
 /** One square per clean pass needed: filled for each one earned. */
 function PassMarks({ count }: { count: number }) {
@@ -51,16 +61,14 @@ function PassMarks({ count }: { count: number }) {
 
 export default function SongScreen() {
   const theme = useTheme();
-  const { passes, save } = usePasses(SONG);
-  const [view, setView] = useState<View_>({ name: 'lines' });
-  const [attempts, setAttempts] = useState(0);
+  const { view, shared, push, replace, back, toFirst } = SongPages.usePage();
+  const { passes, save } = shared;
   const [erasing, setErasing] = useState(false);
-  // A swipe back from a line or its result goes to the list of lines, not the start screen.
-  useSwipeBack(view.name === 'lines' ? null : () => setView({ name: 'lines' }));
 
+  /** Sing a line. From the list it opens on top; from a result it takes its place. */
   const sing = (line: number | null) => {
-    setAttempts(attempts + 1);
-    setView({ name: 'singing', line, attempt: attempts + 1 });
+    if (view.name === 'lines') push({ name: 'singing', line });
+    else replace({ name: 'singing', line });
   };
 
   if (view.name === 'singing') {
@@ -70,13 +78,12 @@ export default function SongScreen() {
         title={line === null ? SONG.title : `Line ${line + 1}`}
         subtitle={line === null ? 'All four lines, one after another.' : SONG.lines[line].words}>
         <ExercisePlayer
-          key={view.attempt}
           steps={line === null ? songSteps(SONG) : [lineStep(SONG, line)]}
           onDone={(results) => {
             save(addPasses(passes, line ?? 0, results));
-            setView({ name: 'result', line, results });
+            replace({ name: 'result', line, results });
           }}
-          onQuit={() => setView({ name: 'lines' })}
+          onQuit={back}
         />
       </Screen>
     );
@@ -105,7 +112,7 @@ export default function SongScreen() {
         {line !== null && upNext !== null && upNext !== line && (
           <Button label={`Go to line ${upNext + 1}`} onPress={() => sing(upNext)} />
         )}
-        <Button label="All lines" onPress={() => setView({ name: 'lines' })} />
+        <Button label="All lines" onPress={toFirst} />
       </Screen>
     );
   }

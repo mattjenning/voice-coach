@@ -62,8 +62,10 @@ The check builds every note from C2 to C6 as four kinds of tone (pure, voice-lik
 | Path | What it holds |
 | --- | --- |
 | `src/app/index.tsx` | The start screen: Today's practice, then three modes |
-| `src/app/today.tsx` | Today's practice: the guided daily session |
-| `src/app/quick.tsx`, `progression.tsx`, `song.tsx` | One screen per mode |
+| `src/modes/today.tsx` | Today's practice: the guided daily session |
+| `src/modes/quick.tsx`, `progression.tsx`, `song.tsx` | One file per mode, holding all its pages |
+| `src/app/<mode>/` | Each mode's routes: `_layout.tsx` (its own stack), `index.tsx` (its first page), `[page].tsx` (any other page) |
+| `src/hooks/mode-pages.tsx` | Turns a mode's views into real pages, so a swipe back shows the page underneath |
 | `src/components/exercise-player.tsx` | Runs an exercise from first step to last: tone, listen, next tone |
 | `src/components/run-view.tsx` | What a running exercise looks like: the note, the meter, the hold bar |
 | `src/components/report-card.tsx` | A report card for one set or a whole session |
@@ -138,7 +140,7 @@ Matthew set the direction on 2026-11-16: dark with yellow over a light version a
 - **Difficulty follows the singer.** In Today's practice the runs and slides move up after 90% or better and down after a score under 70%, so most sets are passed but few are perfect.
 - **The streak counts days, not sessions,** in the phone's own time. It holds through the day after the last session and is gone once a whole day is missed. The longest streak is kept.
 - **A passed level stays open** even when a new level is added in front of it.
-- **A swipe back goes one level up, not out of the mode** (Matthew, 2026-11-25). Each mode is one page with several views inside it, so the phone's swipe from the edge used to close the whole mode and land on the start screen. Now each mode catches the swipe (`src/hooks/use-swipe-back.ts`): in Free practice it goes to the Free practice list, from a Progression level to the list of levels, from a song line to the list of lines, and in Today's practice from a part to the page before it. On a mode's own first page, and between parts of Today's practice, a swipe leaves as before.
+- **Each mode is a stack of real pages** (Matthew, 2026-11-25). A mode's list, a set being sung and its report card used to be views inside one page, so the phone's swipe from the edge slid the whole mode away to the start screen. Catching the swipe still showed the start screen for a moment, so now every view is a page of its own in a stack that belongs to the mode (`src/hooks/mode-pages.tsx`; the screens live in `src/modes/`, and `src/app/<mode>/` has the three route files). A swipe slides the page off and shows the real page underneath. A set and its report card take the place of the page they came from, so a swipe back lands on Free practice's list, Progression's levels, Song mode's lines, or the Today page. State the pages share, such as this session's sets, lives in the mode's layout and lasts while the mode is open.
 - **Missed notes earn partial credit.** A matched note scores 100. A missed one gets up to 50 for how close the best attempt came (full marks on the note, nothing a semitone away) and up to 50 for how much of the hold was done in tune. The set's score is the average, graded on the school scale: A from 90, B from 80, C from 70, D from 60. A C or better passes. The grade sits on a block colored by the grade: green for an A, yellow for a B, orange for a C, red for a D or an F. Since 2026-11-24 each note's own square, during a set and in the list on its report card, is colored by that note's grade the same way, and Today's practice shows each part's grade block between parts. A Progression level is passed by its pass mark or by a C or better; finding the home note still needs a matched note.
 - **"One note" is one semitone**, the next piano key. That is how singers walk a warm-up scale up and down.
 - **Round timings came from trying it** (Matthew, 2026-11-16): a 3 second tone, 3.5 seconds of listening, 2 seconds held.

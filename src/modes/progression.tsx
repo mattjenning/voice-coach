@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Label, Screen } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useProgress } from '@/hooks/use-progress';
-import { useSwipeBack } from '@/hooks/use-swipe-back';
+import { modePages } from '@/hooks/mode-pages';
 import { useTheme } from '@/hooks/use-theme';
 import type { StepResult } from '@/lib/exercise';
 import { noteName } from '@/lib/notes';
@@ -26,11 +26,18 @@ import {
   type Progress,
 } from '@/lib/progression';
 
+/**
+ * The pages of Progression. Each is a real page, so the phone's swipe back
+ * shows the page underneath. A level and its result take each other's place,
+ * so a swipe back from either lands on the list of levels.
+ */
 type View_ =
   | { name: 'path' }
-  /** `attempt` counts tries, so each one starts fresh. */
-  | { name: 'singing'; level: Level; attempt: number }
+  | { name: 'singing'; level: Level }
   | { name: 'result'; level: Level; results: StepResult[]; passed: boolean };
+
+/** Progress is read once for all the pages, so a result shows on the list at once. */
+export const ProgressionPages = modePages<View_, ReturnType<typeof useProgress>>({ name: 'path' }, useProgress);
 
 function LevelRow({
   level,
@@ -66,16 +73,14 @@ function LevelRow({
 
 export default function ProgressionScreen() {
   const theme = useTheme();
-  const { progress, loaded, save } = useProgress();
-  const [view, setView] = useState<View_>({ name: 'path' });
-  const [attempts, setAttempts] = useState(0);
+  const { view, shared, push, replace, back, toFirst } = ProgressionPages.usePage();
+  const { progress, loaded, save } = shared;
   const [erasing, setErasing] = useState(false);
-  // A swipe back from a level or its result goes to the list of levels, not the start screen.
-  useSwipeBack(view.name === 'path' ? null : () => setView({ name: 'path' }));
 
+  /** Start a level. From the list it opens on top; from a result it takes its place. */
   const start = (level: Level) => {
-    setAttempts(attempts + 1);
-    setView({ name: 'singing', level, attempt: attempts + 1 });
+    if (view.name === 'path') push({ name: 'singing', level });
+    else replace({ name: 'singing', level });
   };
 
   if (view.name === 'singing') {
@@ -83,13 +88,12 @@ export default function ProgressionScreen() {
     return (
       <Screen title={level.title} subtitle={level.task}>
         <ExercisePlayer
-          key={view.attempt}
           steps={levelSteps(progress, level)}
           onDone={(results) => {
             save(applyResults(progress, level, results));
-            setView({ name: 'result', level, results, passed: didPass(level, results) });
+            replace({ name: 'result', level, results, passed: didPass(level, results) });
           }}
-          onQuit={() => setView({ name: 'path' })}
+          onQuit={back}
         />
       </Screen>
     );
@@ -123,7 +127,7 @@ export default function ProgressionScreen() {
           <Button primary label={`Next: ${upNext.title}`} onPress={() => start(upNext)} />
         )}
         <Button primary={!passed} label="Try it again" onPress={() => start(level)} />
-        <Button label="All levels" onPress={() => setView({ name: 'path' })} />
+        <Button label="All levels" onPress={toFirst} />
       </Screen>
     );
   }

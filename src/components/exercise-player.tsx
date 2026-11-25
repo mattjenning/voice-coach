@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { AppState } from 'react-native';
 
 import { RunView } from '@/components/run-view';
@@ -45,6 +45,17 @@ export function ExercisePlayer({
     dispatch({ type: 'pitch', hz, atMs, db }),
   );
   const { phase, turn, index } = run;
+  /**
+   * Set once the singer stops. The page then slides away, which takes a moment,
+   * so the microphone goes off at once and a set that ends in that moment does
+   * not report back.
+   */
+  const quitting = useRef(false);
+  const quit = () => {
+    quitting.current = true;
+    stop();
+    onQuit();
+  };
   const step = run.steps[index];
   const next = run.steps[index + 1];
 
@@ -80,7 +91,7 @@ export function ExercisePlayer({
   // When the last step ends, turn the microphone off and hand the results over.
   const results = run.results;
   useEffect(() => {
-    if (phase !== 'done') return;
+    if (phase !== 'done' || quitting.current) return;
     stop();
     onDone(results);
   }, [phase, results, stop, onDone]);
@@ -88,10 +99,14 @@ export function ExercisePlayer({
   // Leaving the app ends the exercise. Coming back to a half-played set is confusing.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'background') onQuit();
+      if (state === 'background' && !quitting.current) {
+        quitting.current = true;
+        stop();
+        onQuit();
+      }
     });
     return () => subscription.remove();
-  }, [onQuit]);
+  }, [onQuit, stop]);
 
   // Turn everything off when this leaves the screen.
   useEffect(() => stop, [stop]);
@@ -101,7 +116,7 @@ export function ExercisePlayer({
     return (
       <>
         <ThemedText themeColor="off">{message ?? 'Stopped.'}</ThemedText>
-        <Button label="Back" onPress={onQuit} />
+        <Button label="Back" onPress={quit} />
       </>
     );
   }
@@ -109,7 +124,7 @@ export function ExercisePlayer({
   return (
     <>
       <RunView run={run} />
-      <Button label="Stop" onPress={onQuit} />
+      <Button label="Stop" onPress={quit} />
     </>
   );
 }

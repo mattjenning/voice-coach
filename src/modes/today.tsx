@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 
 import { ExercisePlayer } from '@/components/exercise-player';
@@ -7,7 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Label, Screen } from '@/components/ui';
 import { useDaily } from '@/hooks/use-daily';
 import { useProgress } from '@/hooks/use-progress';
-import { useSwipeBack } from '@/hooks/use-swipe-back';
+import { modePages } from '@/hooks/mode-pages';
 import {
   dailySets,
   dayKey,
@@ -26,46 +25,77 @@ import { grade, summarize } from '@/lib/report';
 /** Finding the home note is level 1 of Progression. A first session starts with it. */
 const HOME_LEVEL = LEVELS[0];
 
+/**
+ * The pages of Today's practice. Each is a real page, so the phone's swipe
+ * back shows the page underneath. The parts of the day take each other's
+ * place, so a swipe back from any of them lands on the Today page.
+ */
 type View_ =
   | { name: 'intro' }
-  /** Finding the home note, for a singer who has none yet. `missed` is set after a failed try. */
-  | { name: 'home'; attempt: number }
+  /** Finding the home note, for a singer who has none yet. */
+  | { name: 'home' }
   /** About to sing set `at`. */
   | { name: 'ready'; at: number }
-  | { name: 'singing'; at: number; attempt: number }
+  | { name: 'singing'; at: number }
   | { name: 'done'; result: DayResult };
+
+/** What every page of Today's practice shares while it is open. */
+function useShared() {
+  const { progress, loaded: progressLoaded, save: saveProgress } = useProgress();
+  const { daily, loaded: dailyLoaded, save: saveDaily } = useDaily();
+  const [sets, setSets] = useState<DailySet[]>([]);
+  /** The results of each finished set, in order. */
+  const [done, setDone] = useState<StepResult[][]>([]);
+  const [missedHome, setMissedHome] = useState(false);
+  return {
+    progress,
+    progressLoaded,
+    saveProgress,
+    daily,
+    dailyLoaded,
+    saveDaily,
+    sets,
+    setSets,
+    done,
+    setDone,
+    missedHome,
+    setMissedHome,
+  };
+}
+
+export const TodayPages = modePages<View_, ReturnType<typeof useShared>>({ name: 'intro' }, useShared);
 
 const days = (count: number) => (count === 1 ? '1 day' : `${count} days`);
 
 export default function TodayScreen() {
-  const { progress, loaded: progressLoaded, save: saveProgress } = useProgress();
-  const { daily, loaded: dailyLoaded, save: saveDaily } = useDaily();
-  const [view, setView] = useState<View_>({ name: 'intro' });
-  const [sets, setSets] = useState<DailySet[]>([]);
-  /** The results of each finished set, in order. */
-  const [done, setDone] = useState<StepResult[][]>([]);
-  const [attempts, setAttempts] = useState(0);
-  const [missedHome, setMissedHome] = useState(false);
-  // A swipe back while singing does what Stop does: back to the page before the
-  // part. Between parts, a swipe leaves, like "Stop for today".
-  const swipeTo: View_ | null =
-    view.name === 'home' ? { name: 'intro' } : view.name === 'singing' ? { name: 'ready', at: view.at } : null;
-  useSwipeBack(swipeTo === null ? null : () => setView(swipeTo));
+  const { view, shared, push, replace, back, leave } = TodayPages.usePage();
+  const {
+    progress,
+    progressLoaded,
+    saveProgress,
+    daily,
+    dailyLoaded,
+    saveDaily,
+    sets,
+    setSets,
+    done,
+    setDone,
+    missedHome,
+    setMissedHome,
+  } = shared;
 
   const today = dayKey(new Date());
   const scoreOf = (results: StepResult[] | undefined) =>
     results === undefined ? null : summarize(results).score;
 
-  /** Draw today's sets, once, and go to the first. */
+  /** Draw today's sets, once, and go to the first. From the Today page it opens on top. */
   const begin = (home: number) => {
     setSets(dailySets(home, daily, Math.random));
     setDone([]);
-    setView({ name: 'ready', at: 0 });
+    if (view.name === 'intro') push({ name: 'ready', at: 0 });
+    else replace({ name: 'ready', at: 0 });
   };
-  const sing = (at: number) => {
-    setAttempts(attempts + 1);
-    setView({ name: 'singing', at, attempt: attempts + 1 });
-  };
+  const sing = (at: number) => replace({ name: 'singing', at });
 
   if (!progressLoaded || !dailyLoaded) {
     return (
@@ -79,7 +109,6 @@ export default function TodayScreen() {
     return (
       <Screen title={HOME_LEVEL.title} subtitle={HOME_LEVEL.task}>
         <ExercisePlayer
-          key={view.attempt}
           steps={levelSteps(progress, HOME_LEVEL)}
           onDone={(results) => {
             const next = applyResults(progress, HOME_LEVEL, results);
@@ -89,10 +118,10 @@ export default function TodayScreen() {
               begin(next.home);
             } else {
               setMissedHome(true);
-              setView({ name: 'intro' });
+              back();
             }
           }}
-          onQuit={() => setView({ name: 'intro' })}
+          onQuit={back}
         />
       </Screen>
     );
@@ -103,13 +132,12 @@ export default function TodayScreen() {
     return (
       <Screen title={set.title} subtitle={`Part ${view.at + 1} of ${sets.length}. ${set.line}`}>
         <ExercisePlayer
-          key={view.attempt}
           steps={set.steps}
           onDone={(results) => {
             const all = [...done.slice(0, view.at), results];
             setDone(all);
             if (view.at + 1 < sets.length) {
-              setView({ name: 'ready', at: view.at + 1 });
+              replace({ name: 'ready', at: view.at + 1 });
               return;
             }
             const part = (name: DailySet['part']) => scoreOf(all[sets.findIndex((each) => each.part === name)]);
@@ -120,9 +148,9 @@ export default function TodayScreen() {
               scoreOf(all.flat()),
             );
             saveDaily(result.daily);
-            setView({ name: 'done', result });
+            replace({ name: 'done', result });
           }}
-          onQuit={() => setView({ name: 'ready', at: view.at })}
+          onQuit={() => replace({ name: 'ready', at: view.at })}
         />
       </Screen>
     );
@@ -149,7 +177,7 @@ export default function TodayScreen() {
           <ThemedText themeColor="textSecondary">{set.line}</ThemedText>
           <Button primary label={view.at === 0 ? 'Start' : 'Next part'} onPress={() => sing(view.at)} />
         </Card>
-        <Button label="Stop for today" onPress={() => router.back()} />
+        <Button label="Stop for today" onPress={leave} />
       </Screen>
     );
   }
@@ -184,7 +212,7 @@ export default function TodayScreen() {
             ))}
           </Card>
         )}
-        <Button primary label="Done" onPress={() => router.back()} />
+        <Button primary label="Done" onPress={leave} />
         {progress.home !== null && (
           <Button label="Go again with new notes" onPress={() => begin(progress.home ?? 0)} />
         )}
@@ -217,10 +245,7 @@ export default function TodayScreen() {
           <Button
             primary
             label={missedHome ? 'Try again' : 'Find my home note'}
-            onPress={() => {
-              setAttempts(attempts + 1);
-              setView({ name: 'home', attempt: attempts + 1 });
-            }}
+            onPress={() => push({ name: 'home' })}
           />
         </Card>
       ) : (
